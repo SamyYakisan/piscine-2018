@@ -1,0 +1,7 @@
+Credentials cache: API:878539C1-026A-47A0-ADF0-BA659BD99ACE
+        Principal: ycagdas@42.FR
+
+  Issued                Expires               Principal
+Feb  5 13:19:07 2018  Feb 12 13:19:07 2018  krbtgt/42.FR@42.FR
+Feb  5 13:19:09 2018  Feb 12 13:19:07 2018  ldap/ldap-proxy.42.fr@42.FR
+Feb  5 13:19:09 2018  Feb 12 13:19:07 2018  HTTP/student-storage-1.42.fr@42.FR
