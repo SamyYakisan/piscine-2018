@@ -252,3 +252,71 @@ export interface PaginatedResponse<T> extends APIResponse<T[]> {
     totalPages: number
   }
 }
+
+// Appointment Types
+export interface AppointmentCreateRequest {
+  coach_id?: number
+  client_id?: number
+  scheduled_at: string
+  duration_minutes: number
+  type?: string
+  status?: string
+  notes?: string
+}
+
+export interface AppointmentUpdateRequest {
+  scheduled_at?: string
+  duration_minutes?: number
+  type?: string
+  status?: string
+  notes?: string
+}
+
+// Message Types
+export interface MessageCreateRequest {
+  recipient_id: number
+  content: string
+  type?: string
+  parent_message_id?: number
+}
+
+// User Management Types
+export interface UserCreateRequest {
+  email: string
+  password: string
+  name: string
+  role?: string
+  status?: string
+  profile?: {
+    phone?: string
+    date_of_birth?: string
+    gender?: string
+    goals?: string
+  }
+}
+
+export interface UserUpdateRequest {
+  name?: string
+  email?: string
+  role?: string
+  status?: string
+  profile?: UserProfileUpdateRequest
+}
+
+export interface UserProfileUpdateRequest {
+  phone?: string
+  date_of_birth?: string
+  gender?: string
+  height_cm?: number
+  weight_kg?: number
+  activity_level?: string
+  goals?: string
+  medical_conditions?: string
+  emergency_contact?: string
+  specializations?: string
+  certifications?: string
+  experience_years?: number
+  bio?: string
+  hourly_rate?: number
+  availability?: any
+}

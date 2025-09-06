@@ -3,6 +3,12 @@ import { cors } from 'hono/cors'
 import { serveStatic } from 'hono/cloudflare-workers'
 import type { Bindings } from './types/database'
 import authRoutes from './routes/auth'
+import programsRoutes from './routes/programs'
+import workoutsRoutes from './routes/workouts'
+import nutritionRoutes from './routes/nutrition'
+import appointmentsRoutes from './routes/appointments'
+import messagesRoutes from './routes/messages'
+import usersRoutes from './routes/users'
 import { authMiddleware } from './utils/auth'
 
 const app = new Hono<{ Bindings: Bindings }>()
@@ -20,6 +26,39 @@ app.use('/static/*', serveStatic({ root: './public' }))
 
 // Routes d'authentification (pas de middleware auth requis)
 app.route('/api/auth', authRoutes)
+
+// Routes protégées avec authentification
+app.route('/api/programs', programsRoutes)
+app.route('/api/workouts', workoutsRoutes)
+app.route('/api/nutrition', nutritionRoutes)
+app.route('/api/appointments', appointmentsRoutes)
+app.route('/api/messages', messagesRoutes)
+app.route('/api/users', usersRoutes)
+
+// Nouvelle interface moderne
+app.get('/v2', (c) => {
+  return c.html(`
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>CoachFit V2 - Plateforme de Coaching Fitness</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+        <link href="/static/styles.css" rel="stylesheet">
+    </head>
+    <body class="bg-gray-50">
+        <div id="app">
+            <!-- Application content will be dynamically rendered here -->
+        </div>
+        
+        <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
+        <script src="/static/app.js"></script>
+    </body>
+    </html>
+  `)
+})
 
 // API Routes avec base de données
 app.get('/api/stats', authMiddleware(), async (c) => {
