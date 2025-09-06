@@ -184,14 +184,14 @@
 .macro-ring .ring-background {
     fill: none;
     stroke: #e5e7eb;
-    stroke-width: 6;
+    stroke-width: 8;
 }
 
 .macro-ring .ring-progress {
     fill: none;
-    stroke-width: 6;
+    stroke-width: 8;
     stroke-linecap: round;
-    transition: stroke-dasharray 0.5s ease;
+    transition: stroke-dasharray 0.8s ease-in-out;
 }
 
 .macro-ring .ring-text {
@@ -204,6 +204,24 @@
     text-align: center;
 }
 
+/* Line clamp utility */
+.line-clamp-3 {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+/* Macro ring animations */
+@keyframes ringFill {
+    from {
+        stroke-dasharray: 0 226.2;
+    }
+    to {
+        stroke-dasharray: var(--target-dash) 226.2;
+    }
+}
+
 /* Calendar styles */
 .calendar-day {
     aspect-ratio: 1;
@@ -213,25 +231,47 @@
     border-radius: 0.375rem;
     transition: all 0.2s ease;
     cursor: pointer;
+    position: relative;
+    min-height: 40px;
 }
 
 .calendar-day:hover {
     background-color: #f3f4f6;
+    transform: scale(1.05);
 }
 
 .calendar-day.today {
     background-color: #667eea;
     color: white;
+    box-shadow: 0 2px 4px rgba(102, 126, 234, 0.3);
 }
 
 .calendar-day.has-appointment {
     background-color: #10b981;
     color: white;
+    box-shadow: 0 2px 4px rgba(16, 185, 129, 0.3);
+}
+
+.calendar-day.has-appointment::after {
+    content: '';
+    position: absolute;
+    bottom: 2px;
+    right: 2px;
+    width: 6px;
+    height: 6px;
+    background-color: rgba(255, 255, 255, 0.8);
+    border-radius: 50%;
 }
 
 .calendar-day.selected {
     background-color: #764ba2;
     color: white;
+    box-shadow: 0 2px 4px rgba(118, 75, 162, 0.3);
+}
+
+/* Calendar grid responsive */
+#calendar-grid {
+    min-height: 300px;
 }
 
 /* Mobile responsive */

@@ -599,35 +599,2248 @@ class CoachFitApp {
         // Could add logic to pre-select the coach for messaging
     }
 
-    // Placeholder methods for other modules
+    // Programs module helper methods
+    getProgramStatusClass(status) {
+        const classes = {
+            'draft': 'bg-gray-100 text-gray-800',
+            'active': 'bg-green-100 text-green-800',
+            'completed': 'bg-blue-100 text-blue-800',
+            'paused': 'bg-yellow-100 text-yellow-800'
+        }
+        return classes[status] || 'bg-gray-100 text-gray-800'
+    }
+
+    getProgramStatusLabel(status) {
+        const labels = {
+            'draft': 'Brouillon',
+            'active': 'Actif',
+            'completed': 'Terminé',
+            'paused': 'En pause'
+        }
+        return labels[status] || 'Brouillon'
+    }
+
+    async loadClientsForSelect() {
+        try {
+            const response = await this.apiCall('/api/users/clients')
+            if (response.success) {
+                const select = document.getElementById('client-select')
+                if (select) {
+                    response.data.forEach(client => {
+                        const option = document.createElement('option')
+                        option.value = client.id
+                        option.textContent = client.name
+                        select.appendChild(option)
+                    })
+                }
+            }
+        } catch (error) {
+            console.error('Error loading clients:', error)
+        }
+    }
+
+    showCreateProgramModal() {
+        document.getElementById('create-program-modal').classList.remove('hidden')
+        document.body.style.overflow = 'hidden'
+    }
+
+    hideCreateProgramModal() {
+        document.getElementById('create-program-modal').classList.add('hidden')
+        document.body.style.overflow = 'auto'
+        document.getElementById('create-program-form').reset()
+    }
+
+    attachProgramsEventListeners() {
+        const form = document.getElementById('create-program-form')
+        if (form) {
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault()
+                await this.createProgram(e.target)
+            })
+        }
+    }
+
+    async createProgram(form) {
+        const formData = new FormData(form)
+        const programData = {
+            name: formData.get('name'),
+            description: formData.get('description'),
+            type: formData.get('type'),
+            difficulty: formData.get('difficulty'),
+            duration_weeks: parseInt(formData.get('duration_weeks')) || null,
+            sessions_per_week: parseInt(formData.get('sessions_per_week')) || null,
+            client_id: formData.get('client_id') || null
+        }
+
+        try {
+            const response = await this.apiCall('/api/programs', 'POST', programData)
+            
+            if (response.success) {
+                this.hideCreateProgramModal()
+                this.loadModule('programs') // Reload programs
+                this.showNotification('Programme créé avec succès!', 'success')
+            } else {
+                this.showNotification(response.message || 'Erreur lors de la création', 'error')
+            }
+        } catch (error) {
+            console.error('Error creating program:', error)
+            this.showNotification('Erreur lors de la création du programme', 'error')
+        }
+    }
+
+    async viewProgram(programId) {
+        try {
+            const response = await this.apiCall(`/api/programs/${programId}`)
+            if (response.success) {
+                this.showProgramDetails(response.data)
+            }
+        } catch (error) {
+            console.error('Error loading program details:', error)
+        }
+    }
+
+    async editProgram(programId) {
+        // TODO: Implement edit program modal
+        this.showNotification('Fonction de modification en développement', 'info')
+    }
+
+    async startWorkout(programId) {
+        // TODO: Redirect to workouts with this program
+        this.loadModule('my-workouts')
+        this.showNotification('Redirection vers les séances...', 'info')
+    }
+
+    async viewClientProfile(clientId) {
+        // TODO: Show client profile modal
+        this.showNotification('Fonction de profil client en développement', 'info')
+    }
+
+    async createProgramForClient(clientId) {
+        this.showCreateProgramModal()
+        // Pre-select the client
+        setTimeout(() => {
+            const select = document.getElementById('client-select')
+            if (select) {
+                select.value = clientId
+            }
+        }, 100)
+    }
+
+    showProgramDetails(program) {
+        // TODO: Implement detailed program view
+        alert(`Programme: ${program.name}\nType: ${program.type}\nStatut: ${program.status}`)
+    }
+
+    showNotification(message, type = 'info') {
+        // Simple notification system
+        const notification = document.createElement('div')
+        notification.className = `fixed top-4 right-4 p-4 rounded-md z-50 ${
+            type === 'success' ? 'bg-green-500 text-white' :
+            type === 'error' ? 'bg-red-500 text-white' :
+            'bg-blue-500 text-white'
+        }`
+        notification.textContent = message
+
+        document.body.appendChild(notification)
+
+        setTimeout(() => {
+            notification.remove()
+        }, 3000)
+    }
+
+    // Workouts module helper methods
+    getWorkoutStatusClass(status) {
+        const classes = {
+            'scheduled': 'bg-blue-100 text-blue-800',
+            'in_progress': 'bg-yellow-100 text-yellow-800',
+            'completed': 'bg-green-100 text-green-800',
+            'cancelled': 'bg-red-100 text-red-800'
+        }
+        return classes[status] || 'bg-gray-100 text-gray-800'
+    }
+
+    getWorkoutStatusLabel(status) {
+        const labels = {
+            'scheduled': 'Prévue',
+            'in_progress': 'En cours',
+            'completed': 'Terminée',
+            'cancelled': 'Annulée'
+        }
+        return labels[status] || 'Brouillon'
+    }
+
+    filterWorkouts(status) {
+        // Update tab visual state
+        document.querySelectorAll('.workout-filter-tab').forEach(tab => {
+            tab.classList.remove('border-blue-500', 'text-blue-600')
+            tab.classList.add('border-transparent', 'text-gray-500')
+        })
+        
+        const activeTab = document.querySelector(`[data-filter="${status}"]`)
+        if (activeTab) {
+            activeTab.classList.remove('border-transparent', 'text-gray-500')
+            activeTab.classList.add('border-blue-500', 'text-blue-600')
+        }
+
+        // Filter workouts
+        document.querySelectorAll('.workout-item').forEach(item => {
+            if (status === 'all' || item.dataset.status === status) {
+                item.style.display = 'block'
+            } else {
+                item.style.display = 'none'
+            }
+        })
+    }
+
+    showCreateWorkoutModal() {
+        document.getElementById('create-workout-modal').classList.remove('hidden')
+        document.body.style.overflow = 'hidden'
+    }
+
+    hideCreateWorkoutModal() {
+        document.getElementById('create-workout-modal').classList.add('hidden')
+        document.body.style.overflow = 'auto'
+        document.getElementById('create-workout-form').reset()
+    }
+
+    async loadProgramsForWorkoutSelect() {
+        try {
+            const response = await this.apiCall('/api/programs')
+            if (response.success) {
+                const select = document.getElementById('workout-program-select')
+                if (select) {
+                    response.data.forEach(program => {
+                        const option = document.createElement('option')
+                        option.value = program.id
+                        option.textContent = program.name
+                        select.appendChild(option)
+                    })
+                }
+            }
+        } catch (error) {
+            console.error('Error loading programs for workout:', error)
+        }
+    }
+
+    async loadClientsForWorkoutSelect() {
+        try {
+            const response = await this.apiCall('/api/users/clients')
+            if (response.success) {
+                const select = document.getElementById('workout-client-select')
+                if (select) {
+                    response.data.forEach(client => {
+                        const option = document.createElement('option')
+                        option.value = client.id
+                        option.textContent = client.name
+                        select.appendChild(option)
+                    })
+                }
+            }
+        } catch (error) {
+            console.error('Error loading clients for workout:', error)
+        }
+    }
+
+    attachWorkoutsEventListeners() {
+        const form = document.getElementById('create-workout-form')
+        if (form) {
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault()
+                await this.createWorkout(e.target)
+            })
+        }
+    }
+
+    async createWorkout(form) {
+        const formData = new FormData(form)
+        const workoutData = {
+            name: formData.get('name'),
+            duration_minutes: parseInt(formData.get('duration_minutes')) || null,
+            program_id: formData.get('program_id') || null,
+            client_id: formData.get('client_id') || null,
+            scheduled_date: formData.get('scheduled_date') || null,
+            notes: formData.get('notes') || null
+        }
+
+        try {
+            const response = await this.apiCall('/api/workouts', 'POST', workoutData)
+            
+            if (response.success) {
+                this.hideCreateWorkoutModal()
+                this.loadModule('workouts') // Reload workouts
+                this.showNotification('Séance créée avec succès!', 'success')
+            } else {
+                this.showNotification(response.message || 'Erreur lors de la création', 'error')
+            }
+        } catch (error) {
+            console.error('Error creating workout:', error)
+            this.showNotification('Erreur lors de la création de la séance', 'error')
+        }
+    }
+
+    async viewWorkoutDetails(workoutId) {
+        try {
+            const response = await this.apiCall(`/api/workouts/${workoutId}`)
+            if (response.success) {
+                this.showWorkoutDetailsModal(response.data)
+            }
+        } catch (error) {
+            console.error('Error loading workout details:', error)
+        }
+    }
+
+    showWorkoutDetailsModal(workout) {
+        // Create modal for workout details
+        const modal = document.createElement('div')
+        modal.className = 'fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4'
+        modal.innerHTML = `
+            <div class="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+                <div class="flex justify-between items-center mb-6">
+                    <h3 class="text-lg font-semibold text-gray-900">${workout.name}</h3>
+                    <button onclick="this.parentElement.parentElement.parentElement.remove(); document.body.style.overflow = 'auto'" 
+                            class="text-gray-500 hover:text-gray-700">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                
+                <div class="space-y-4">
+                    <div class="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                            <strong>Statut:</strong> ${this.getWorkoutStatusLabel(workout.status)}
+                        </div>
+                        <div>
+                            <strong>Durée:</strong> ${workout.duration_minutes || 'N/A'} min
+                        </div>
+                        <div>
+                            <strong>Date:</strong> ${workout.scheduled_date ? new Date(workout.scheduled_date).toLocaleDateString('fr-FR') : 'Non planifiée'}
+                        </div>
+                        <div>
+                            <strong>Volume total:</strong> ${workout.total_volume || 0} kg
+                        </div>
+                    </div>
+                    
+                    ${workout.notes ? `
+                        <div>
+                            <strong>Notes:</strong>
+                            <p class="mt-1 text-gray-600">${workout.notes}</p>
+                        </div>
+                    ` : ''}
+                    
+                    ${workout.exercises && workout.exercises.length > 0 ? `
+                        <div>
+                            <strong>Exercices:</strong>
+                            <div class="mt-2 space-y-2">
+                                ${workout.exercises.map(ex => `
+                                    <div class="border rounded p-3">
+                                        <div class="font-medium">${ex.exercise_name}</div>
+                                        <div class="text-sm text-gray-600">
+                                            ${ex.sets} séries × ${ex.reps} reps
+                                            ${ex.weight ? ` @ ${ex.weight} kg` : ''}
+                                            ${ex.rest_seconds ? ` (repos: ${ex.rest_seconds}s)` : ''}
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    ` : '<div class="text-gray-600">Aucun exercice défini</div>'}
+                </div>
+            </div>
+        `
+        
+        document.body.appendChild(modal)
+        document.body.style.overflow = 'hidden'
+    }
+
+    async startWorkoutSession(workoutId) {
+        try {
+            const response = await this.apiCall(`/api/workouts/${workoutId}`, 'PUT', {
+                status: 'in_progress',
+                started_at: new Date().toISOString()
+            })
+            
+            if (response.success) {
+                this.showNotification('Séance démarrée!', 'success')
+                this.loadModule('workouts') // Refresh
+            }
+        } catch (error) {
+            console.error('Error starting workout:', error)
+            this.showNotification('Erreur lors du démarrage', 'error')
+        }
+    }
+
+    async continueWorkoutSession(workoutId) {
+        // TODO: Open workout session interface
+        this.showNotification('Interface de séance en développement', 'info')
+    }
+
+    async editWorkout(workoutId) {
+        // TODO: Open edit workout modal
+        this.showNotification('Fonction de modification en développement', 'info')
+    }
+
+    // Nutrition module helper methods
+    calculateNutritionStats(meals) {
+        return meals.reduce((stats, meal) => ({
+            calories: stats.calories + (parseFloat(meal.calories) || 0),
+            protein: stats.protein + (parseFloat(meal.protein) || 0),
+            carbs: stats.carbs + (parseFloat(meal.carbs) || 0),
+            fat: stats.fat + (parseFloat(meal.fat) || 0)
+        }), { calories: 0, protein: 0, carbs: 0, fat: 0 })
+    }
+
+    calculateRingProgress(current, target) {
+        const percentage = Math.min((current / target) * 100, 100)
+        const circumference = 2 * Math.PI * 36 // radius = 36
+        return (percentage / 100) * circumference
+    }
+
+    getMealTypeLabel(type) {
+        const labels = {
+            'breakfast': 'Petit-déj',
+            'lunch': 'Déjeuner',
+            'dinner': 'Dîner',
+            'snack': 'Collation'
+        }
+        return labels[type] || type
+    }
+
+    showAddMealModal() {
+        document.getElementById('add-meal-modal').classList.remove('hidden')
+        document.body.style.overflow = 'hidden'
+        
+        // Set current time and suggest meal type
+        const now = new Date()
+        const hour = now.getHours()
+        let mealType = 'snack'
+        
+        if (hour >= 6 && hour < 11) mealType = 'breakfast'
+        else if (hour >= 11 && hour < 15) mealType = 'lunch'
+        else if (hour >= 17 && hour < 22) mealType = 'dinner'
+        
+        const mealTypeSelect = document.querySelector('#add-meal-form select[name="meal_type"]')
+        if (mealTypeSelect) {
+            mealTypeSelect.value = mealType
+        }
+    }
+
+    hideAddMealModal() {
+        document.getElementById('add-meal-modal').classList.add('hidden')
+        document.body.style.overflow = 'auto'
+        document.getElementById('add-meal-form').reset()
+    }
+
+    attachNutritionEventListeners() {
+        const form = document.getElementById('add-meal-form')
+        if (form) {
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault()
+                await this.addMeal(e.target)
+            })
+        }
+    }
+
+    async addMeal(form) {
+        const formData = new FormData(form)
+        const mealData = {
+            meal_name: formData.get('meal_name'),
+            meal_type: formData.get('meal_type'),
+            calories: parseFloat(formData.get('calories')),
+            protein: parseFloat(formData.get('protein')),
+            carbs: parseFloat(formData.get('carbs')),
+            fat: parseFloat(formData.get('fat')),
+            logged_at: new Date().toISOString()
+        }
+
+        try {
+            const response = await this.apiCall('/api/nutrition/meals', 'POST', mealData)
+            
+            if (response.success) {
+                this.hideAddMealModal()
+                this.loadModule('nutrition') // Reload nutrition
+                this.showNotification('Repas ajouté avec succès!', 'success')
+            } else {
+                this.showNotification(response.message || 'Erreur lors de l\'ajout', 'error')
+            }
+        } catch (error) {
+            console.error('Error adding meal:', error)
+            this.showNotification('Erreur lors de l\'ajout du repas', 'error')
+        }
+    }
+
+    async editMeal(mealId) {
+        // TODO: Open edit meal modal
+        this.showNotification('Fonction de modification en développement', 'info')
+    }
+
+    async deleteMeal(mealId) {
+        if (confirm('Êtes-vous sûr de vouloir supprimer ce repas ?')) {
+            try {
+                const response = await this.apiCall(`/api/nutrition/meals/${mealId}`, 'DELETE')
+                
+                if (response.success) {
+                    this.loadModule('nutrition') // Reload nutrition
+                    this.showNotification('Repas supprimé avec succès!', 'success')
+                } else {
+                    this.showNotification(response.message || 'Erreur lors de la suppression', 'error')
+                }
+            } catch (error) {
+                console.error('Error deleting meal:', error)
+                this.showNotification('Erreur lors de la suppression', 'error')
+            }
+        }
+    }
+
+    async showNutritionGoalsModal() {
+        // TODO: Open nutrition goals modal
+        this.showNotification('Fonction d\'objectifs nutritionnels en développement', 'info')
+    }
+
+    async showNutritionHistory() {
+        // TODO: Open nutrition history modal with charts
+        this.showNotification('Fonction d\'historique nutritionnel en développement', 'info')
+    }
+
+    // Messages module helper methods
+    currentConversationId = null
+    currentConversationName = null
+
+    async loadMessageRecipients() {
+        try {
+            const endpoint = this.user.role === 'coach' ? '/api/users/clients' : '/api/users/coaches'
+            const response = await this.apiCall(endpoint)
+            
+            if (response.success) {
+                const select = document.getElementById('new-message-recipient')
+                if (select) {
+                    select.innerHTML = '<option value="">Sélectionner...</option>'
+                    response.data.forEach(user => {
+                        const option = document.createElement('option')
+                        option.value = user.id
+                        option.textContent = user.name
+                        select.appendChild(option)
+                    })
+                }
+            }
+        } catch (error) {
+            console.error('Error loading message recipients:', error)
+        }
+    }
+
+    showNewMessageModal() {
+        document.getElementById('new-message-modal').classList.remove('hidden')
+        document.body.style.overflow = 'hidden'
+    }
+
+    hideNewMessageModal() {
+        document.getElementById('new-message-modal').classList.add('hidden')
+        document.body.style.overflow = 'auto'
+        document.getElementById('new-message-form').reset()
+    }
+
+    attachMessagesEventListeners() {
+        // Send message form
+        const sendForm = document.getElementById('send-message-form')
+        if (sendForm) {
+            sendForm.addEventListener('submit', async (e) => {
+                e.preventDefault()
+                await this.sendQuickMessage()
+            })
+        }
+
+        // New message form
+        const newMessageForm = document.getElementById('new-message-form')
+        if (newMessageForm) {
+            newMessageForm.addEventListener('submit', async (e) => {
+                e.preventDefault()
+                await this.sendNewMessage(e.target)
+            })
+        }
+    }
+
+    async selectConversation(userId, userName) {
+        this.currentConversationId = userId
+        this.currentConversationName = userName
+
+        // Update UI
+        document.getElementById('messages-header').classList.remove('hidden')
+        document.getElementById('message-input-area').classList.remove('hidden')
+        document.getElementById('chat-participant-name').textContent = userName
+        document.getElementById('chat-participant-initial').textContent = userName.charAt(0)
+        document.getElementById('recipient-id').value = userId
+
+        // Update conversation selection visual state
+        document.querySelectorAll('.conversation-item').forEach(item => {
+            item.classList.remove('bg-blue-50', 'border-l-4', 'border-blue-500')
+        })
+        
+        const selectedConv = document.querySelector(`[data-conversation-id="${userId}"]`)
+        if (selectedConv) {
+            selectedConv.classList.add('bg-blue-50', 'border-l-4', 'border-blue-500')
+        }
+
+        // Load conversation messages
+        await this.loadConversationMessages(userId)
+
+        // Mark messages as read
+        this.markConversationAsRead(userId)
+    }
+
+    async loadConversationMessages(userId) {
+        try {
+            const response = await this.apiCall(`/api/messages?conversation_with=${userId}&limit=100`)
+            
+            if (response.success) {
+                const messagesContent = document.getElementById('messages-content')
+                const messages = response.data || []
+
+                if (messages.length === 0) {
+                    messagesContent.innerHTML = `
+                        <div class="h-full flex items-center justify-center text-gray-500">
+                            <div class="text-center">
+                                <i class="fas fa-comment text-3xl mb-4"></i>
+                                <p>Aucun message dans cette conversation</p>
+                                <p class="text-sm mt-2">Commencez à discuter ci-dessous!</p>
+                            </div>
+                        </div>
+                    `
+                } else {
+                    messagesContent.innerHTML = `
+                        <div class="space-y-4">
+                            ${messages.reverse().map(message => `
+                                <div class="flex ${message.sender_id === this.user.id ? 'justify-end' : 'justify-start'}">
+                                    <div class="chat-bubble ${message.sender_id === this.user.id ? 'sent' : 'received'} max-w-xs lg:max-w-md">
+                                        <div class="text-sm">${message.content}</div>
+                                        <div class="text-xs opacity-75 mt-1">
+                                            ${new Date(message.created_at).toLocaleTimeString('fr-FR', { 
+                                                hour: '2-digit', 
+                                                minute: '2-digit' 
+                                            })}
+                                        </div>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    `
+                    
+                    // Scroll to bottom
+                    messagesContent.scrollTop = messagesContent.scrollHeight
+                }
+            }
+        } catch (error) {
+            console.error('Error loading conversation messages:', error)
+        }
+    }
+
+    async sendQuickMessage() {
+        const messageInput = document.getElementById('message-input')
+        const recipientId = document.getElementById('recipient-id').value
+        const content = messageInput.value.trim()
+
+        if (!content || !recipientId) return
+
+        try {
+            const response = await this.apiCall('/api/messages', 'POST', {
+                recipient_id: parseInt(recipientId),
+                content: content
+            })
+
+            if (response.success) {
+                messageInput.value = ''
+                // Reload conversation messages
+                await this.loadConversationMessages(this.currentConversationId)
+                this.showNotification('Message envoyé!', 'success')
+            } else {
+                this.showNotification(response.message || 'Erreur lors de l\'envoi', 'error')
+            }
+        } catch (error) {
+            console.error('Error sending message:', error)
+            this.showNotification('Erreur lors de l\'envoi du message', 'error')
+        }
+    }
+
+    async sendNewMessage(form) {
+        const formData = new FormData(form)
+        const messageData = {
+            recipient_id: parseInt(formData.get('recipient_id')),
+            content: formData.get('content')
+        }
+
+        try {
+            const response = await this.apiCall('/api/messages', 'POST', messageData)
+            
+            if (response.success) {
+                this.hideNewMessageModal()
+                this.loadModule('messages') // Reload messages
+                this.showNotification('Message envoyé avec succès!', 'success')
+            } else {
+                this.showNotification(response.message || 'Erreur lors de l\'envoi', 'error')
+            }
+        } catch (error) {
+            console.error('Error sending new message:', error)
+            this.showNotification('Erreur lors de l\'envoi du message', 'error')
+        }
+    }
+
+    async markConversationAsRead(userId) {
+        try {
+            await this.apiCall(`/api/messages/conversation/${userId}/read`, 'PUT')
+        } catch (error) {
+            console.error('Error marking conversation as read:', error)
+        }
+    }
+
+    // Appointments module helper methods
+    currentCalendarDate = new Date()
+    appointmentsByDate = {}
+
+    getAppointmentTypeLabel(type) {
+        const labels = {
+            'consultation': 'Consultation',
+            'training': 'Entraînement',
+            'nutrition': 'Nutrition',
+            'assessment': 'Évaluation'
+        }
+        return labels[type] || type
+    }
+
+    getAppointmentStatusClass(status) {
+        const classes = {
+            'scheduled': 'bg-blue-100 text-blue-800',
+            'confirmed': 'bg-green-100 text-green-800',
+            'completed': 'bg-gray-100 text-gray-800',
+            'cancelled': 'bg-red-100 text-red-800',
+            'no_show': 'bg-yellow-100 text-yellow-800'
+        }
+        return classes[status] || 'bg-gray-100 text-gray-800'
+    }
+
+    getAppointmentStatusLabel(status) {
+        const labels = {
+            'scheduled': 'Programmé',
+            'confirmed': 'Confirmé',
+            'completed': 'Terminé',
+            'cancelled': 'Annulé',
+            'no_show': 'Absence'
+        }
+        return labels[status] || status
+    }
+
+    renderCalendar() {
+        const calendarGrid = document.getElementById('calendar-grid')
+        const monthYearSpan = document.getElementById('current-month-year')
+        
+        if (!calendarGrid || !monthYearSpan) return
+
+        const year = this.currentCalendarDate.getFullYear()
+        const month = this.currentCalendarDate.getMonth()
+        
+        monthYearSpan.textContent = this.currentCalendarDate.toLocaleDateString('fr-FR', { 
+            month: 'long', 
+            year: 'numeric' 
+        })
+
+        // Clear calendar
+        calendarGrid.innerHTML = ''
+
+        // Add day headers
+        const dayHeaders = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam']
+        dayHeaders.forEach(day => {
+            const dayElement = document.createElement('div')
+            dayElement.className = 'text-center font-medium text-gray-700 py-2'
+            dayElement.textContent = day
+            calendarGrid.appendChild(dayElement)
+        })
+
+        // Get first day of month and number of days
+        const firstDay = new Date(year, month, 1)
+        const lastDay = new Date(year, month + 1, 0)
+        const daysInMonth = lastDay.getDate()
+        const startingDayOfWeek = firstDay.getDay()
+
+        // Add empty cells for days before month starts
+        for (let i = 0; i < startingDayOfWeek; i++) {
+            const emptyDay = document.createElement('div')
+            emptyDay.className = 'calendar-day text-center py-2 text-gray-400'
+            calendarGrid.appendChild(emptyDay)
+        }
+
+        // Add days of the month
+        for (let day = 1; day <= daysInMonth; day++) {
+            const dayElement = document.createElement('div')
+            const currentDate = new Date(year, month, day)
+            const dateString = currentDate.toISOString().split('T')[0]
+            
+            let dayClasses = 'calendar-day text-center py-2 cursor-pointer hover:bg-gray-100'
+            
+            // Check if it's today
+            const today = new Date()
+            if (currentDate.toDateString() === today.toDateString()) {
+                dayClasses += ' today'
+            }
+            
+            // Check if there are appointments
+            if (this.appointmentsByDate[dateString]) {
+                dayClasses += ' has-appointment'
+                dayElement.title = `${this.appointmentsByDate[dateString].length} rendez-vous`
+            }
+
+            dayElement.className = dayClasses
+            dayElement.textContent = day
+            dayElement.addEventListener('click', () => {
+                // TODO: Show appointments for this day
+                this.showDayAppointments(dateString)
+            })
+            
+            calendarGrid.appendChild(dayElement)
+        }
+    }
+
+    previousMonth() {
+        this.currentCalendarDate.setMonth(this.currentCalendarDate.getMonth() - 1)
+        this.renderCalendar()
+    }
+
+    nextMonth() {
+        this.currentCalendarDate.setMonth(this.currentCalendarDate.getMonth() + 1)
+        this.renderCalendar()
+    }
+
+    showDayAppointments(dateString) {
+        const appointments = this.appointmentsByDate[dateString] || []
+        if (appointments.length === 0) {
+            this.showNotification('Aucun rendez-vous ce jour-là', 'info')
+            return
+        }
+
+        // TODO: Show appointments in a modal or scroll to appointments list
+        this.showNotification(`${appointments.length} rendez-vous ce jour-là`, 'info')
+    }
+
+    filterAppointments(status) {
+        // Update tab visual state
+        document.querySelectorAll('.appointment-filter-tab').forEach(tab => {
+            tab.classList.remove('bg-blue-500', 'text-white')
+            tab.classList.add('text-gray-600', 'hover:bg-gray-100')
+        })
+        
+        const activeTab = document.querySelector(`[data-filter="${status}"]`)
+        if (activeTab) {
+            activeTab.classList.remove('text-gray-600', 'hover:bg-gray-100')
+            activeTab.classList.add('bg-blue-500', 'text-white')
+        }
+
+        // Filter appointments
+        document.querySelectorAll('.appointment-item').forEach(item => {
+            if (status === 'all' || item.dataset.status === status) {
+                item.style.display = 'block'
+            } else {
+                item.style.display = 'none'
+            }
+        })
+    }
+
+    showCreateAppointmentModal() {
+        document.getElementById('create-appointment-modal').classList.remove('hidden')
+        document.body.style.overflow = 'hidden'
+    }
+
+    hideCreateAppointmentModal() {
+        document.getElementById('create-appointment-modal').classList.add('hidden')
+        document.body.style.overflow = 'auto'
+        document.getElementById('create-appointment-form').reset()
+    }
+
+    async loadAppointmentParticipants() {
+        try {
+            if (this.user.role === 'client') {
+                // Load coaches for clients
+                const response = await this.apiCall('/api/users/coaches')
+                if (response.success) {
+                    const select = document.getElementById('appointment-coach-select')
+                    if (select) {
+                        response.data.forEach(coach => {
+                            const option = document.createElement('option')
+                            option.value = coach.id
+                            option.textContent = coach.name
+                            select.appendChild(option)
+                        })
+                    }
+                }
+            } else {
+                // Load clients for coaches
+                const response = await this.apiCall('/api/users/clients')
+                if (response.success) {
+                    const select = document.getElementById('appointment-client-select')
+                    if (select) {
+                        response.data.forEach(client => {
+                            const option = document.createElement('option')
+                            option.value = client.id
+                            option.textContent = client.name
+                            select.appendChild(option)
+                        })
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Error loading appointment participants:', error)
+        }
+    }
+
+    attachAppointmentsEventListeners() {
+        const form = document.getElementById('create-appointment-form')
+        if (form) {
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault()
+                await this.createAppointment(e.target)
+            })
+        }
+    }
+
+    async createAppointment(form) {
+        const formData = new FormData(form)
+        const scheduledDate = formData.get('scheduled_date')
+        const scheduledTime = formData.get('scheduled_time')
+        
+        const appointmentData = {
+            scheduled_at: `${scheduledDate}T${scheduledTime}:00`,
+            duration_minutes: parseInt(formData.get('duration_minutes')),
+            type: formData.get('type'),
+            notes: formData.get('notes') || null
+        }
+
+        if (this.user.role === 'client') {
+            appointmentData.coach_id = parseInt(formData.get('coach_id'))
+        } else {
+            const clientId = formData.get('client_id')
+            if (clientId) {
+                appointmentData.client_id = parseInt(clientId)
+            }
+        }
+
+        try {
+            const response = await this.apiCall('/api/appointments', 'POST', appointmentData)
+            
+            if (response.success) {
+                this.hideCreateAppointmentModal()
+                this.loadModule('appointments') // Reload appointments
+                this.showNotification('Rendez-vous créé avec succès!', 'success')
+            } else {
+                this.showNotification(response.message || 'Erreur lors de la création', 'error')
+            }
+        } catch (error) {
+            console.error('Error creating appointment:', error)
+            this.showNotification('Erreur lors de la création du rendez-vous', 'error')
+        }
+    }
+
+    async confirmAppointment(appointmentId) {
+        try {
+            const response = await this.apiCall(`/api/appointments/${appointmentId}`, 'PUT', {
+                status: 'confirmed'
+            })
+            
+            if (response.success) {
+                this.loadModule('appointments') // Reload
+                this.showNotification('Rendez-vous confirmé!', 'success')
+            }
+        } catch (error) {
+            console.error('Error confirming appointment:', error)
+            this.showNotification('Erreur lors de la confirmation', 'error')
+        }
+    }
+
+    async completeAppointment(appointmentId) {
+        try {
+            const response = await this.apiCall(`/api/appointments/${appointmentId}`, 'PUT', {
+                status: 'completed'
+            })
+            
+            if (response.success) {
+                this.loadModule('appointments') // Reload
+                this.showNotification('Rendez-vous marqué comme terminé!', 'success')
+            }
+        } catch (error) {
+            console.error('Error completing appointment:', error)
+            this.showNotification('Erreur lors de la finalisation', 'error')
+        }
+    }
+
+    async cancelAppointment(appointmentId) {
+        if (confirm('Êtes-vous sûr de vouloir annuler ce rendez-vous ?')) {
+            try {
+                const response = await this.apiCall(`/api/appointments/${appointmentId}`, 'PUT', {
+                    status: 'cancelled'
+                })
+                
+                if (response.success) {
+                    this.loadModule('appointments') // Reload
+                    this.showNotification('Rendez-vous annulé', 'success')
+                }
+            } catch (error) {
+                console.error('Error cancelling appointment:', error)
+                this.showNotification('Erreur lors de l\'annulation', 'error')
+            }
+        }
+    }
+
+    async viewAppointmentDetails(appointmentId) {
+        try {
+            const response = await this.apiCall(`/api/appointments/${appointmentId}`)
+            if (response.success) {
+                // TODO: Show appointment details modal
+                alert(`Rendez-vous: ${response.data.type}\nDate: ${new Date(response.data.scheduled_at).toLocaleString('fr-FR')}`)
+            }
+        } catch (error) {
+            console.error('Error loading appointment details:', error)
+        }
+    }
+
+    // Complete modules implementation
     async loadClientsModule() {
         const content = document.getElementById('module-content')
-        content.innerHTML = '<div class="text-center py-8">Module Clients en développement...</div>'
+        const response = await this.apiCall('/api/users/clients')
+        
+        if (!response.success) {
+            content.innerHTML = '<div class="text-red-500">Erreur lors du chargement des clients</div>'
+            return
+        }
+
+        const clients = response.data
+
+        content.innerHTML = `
+            <div class="mb-6">
+                <h2 class="text-2xl font-bold text-gray-900 mb-2">Mes Clients</h2>
+                <p class="text-gray-600">Gérez vos clients et leur progression</p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                ${clients.map(client => `
+                    <div class="bg-white border rounded-lg p-6 hover:shadow-md transition-shadow">
+                        <div class="flex items-center mb-4">
+                            <div class="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center text-white font-bold text-lg">
+                                ${client.name.charAt(0)}
+                            </div>
+                            <div class="ml-3">
+                                <h3 class="font-semibold text-gray-900">${client.name}</h3>
+                                <p class="text-sm text-gray-600">${client.email}</p>
+                            </div>
+                        </div>
+                        
+                        <div class="space-y-2 mb-4">
+                            ${client.phone ? `<p class="text-sm text-gray-600"><i class="fas fa-phone mr-2"></i>${client.phone}</p>` : ''}
+                            ${client.goals ? `<p class="text-sm text-gray-600"><i class="fas fa-target mr-2"></i>${client.goals}</p>` : ''}
+                        </div>
+                        
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-gray-500">
+                                Depuis ${new Date(client.created_at).toLocaleDateString('fr-FR')}
+                            </span>
+                            <div class="flex space-x-2">
+                                <button class="bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600"
+                                        onclick="app.viewClientProfile(${client.id})">
+                                    Profil
+                                </button>
+                                <button class="bg-green-500 text-white px-3 py-1 rounded text-sm hover:bg-green-600"
+                                        onclick="app.createProgramForClient(${client.id})">
+                                    Programme
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+            
+            ${clients.length === 0 ? `
+                <div class="text-center py-12">
+                    <i class="fas fa-users text-4xl text-gray-400 mb-4"></i>
+                    <h3 class="text-lg font-medium text-gray-900 mb-2">Aucun client pour le moment</h3>
+                    <p class="text-gray-600">Vos clients apparaîtront ici une fois qu'ils auront des programmes assignés.</p>
+                </div>
+            ` : ''}
+        `
     }
 
     async loadProgramsModule() {
         const content = document.getElementById('module-content')
-        content.innerHTML = '<div class="text-center py-8">Module Programmes en développement...</div>'
+        const response = await this.apiCall('/api/programs')
+        
+        if (!response.success) {
+            content.innerHTML = '<div class="text-red-500">Erreur lors du chargement des programmes</div>'
+            return
+        }
+
+        const programs = response.data
+
+        content.innerHTML = `
+            <div class="mb-6 flex justify-between items-center">
+                <div>
+                    <h2 class="text-2xl font-bold text-gray-900 mb-2">
+                        ${this.user.role === 'coach' ? 'Mes Programmes' : 'Mes Programmes d\'Entraînement'}
+                    </h2>
+                    <p class="text-gray-600">
+                        ${this.user.role === 'coach' ? 'Créez et gérez vos programmes d\'entraînement' : 'Consultez vos programmes assignés par votre coach'}
+                    </p>
+                </div>
+                ${this.user.role === 'coach' ? `
+                    <button onclick="app.showCreateProgramModal()" 
+                            class="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 flex items-center">
+                        <i class="fas fa-plus mr-2"></i>
+                        Nouveau Programme
+                    </button>
+                ` : ''}
+            </div>
+
+            <!-- Programs Grid -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+                ${programs.map(program => `
+                    <div class="bg-white border rounded-lg p-6 hover:shadow-md transition-shadow">
+                        <div class="flex justify-between items-start mb-4">
+                            <div>
+                                <h3 class="font-semibold text-gray-900 mb-1">${program.name}</h3>
+                                <span class="inline-block px-2 py-1 text-xs font-medium rounded-full ${this.getProgramStatusClass(program.status)}">
+                                    ${this.getProgramStatusLabel(program.status)}
+                                </span>
+                            </div>
+                            <div class="flex items-center text-sm text-gray-500">
+                                <i class="fas fa-calendar mr-1"></i>
+                                ${program.duration_weeks || 'N/A'}w
+                            </div>
+                        </div>
+                        
+                        <div class="mb-4">
+                            <p class="text-sm text-gray-600 line-clamp-3">
+                                ${program.description || 'Aucune description disponible'}
+                            </p>
+                        </div>
+                        
+                        <div class="space-y-2 mb-4 text-sm text-gray-600">
+                            <div class="flex justify-between">
+                                <span>Type:</span>
+                                <span class="font-medium capitalize">${program.type || 'Mixed'}</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span>Séances/semaine:</span>
+                                <span class="font-medium">${program.sessions_per_week || 'N/A'}</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span>Niveau:</span>
+                                <span class="font-medium capitalize">${program.difficulty || 'Intermédiaire'}</span>
+                            </div>
+                            ${this.user.role === 'coach' && program.client_name ? `
+                                <div class="flex justify-between">
+                                    <span>Client:</span>
+                                    <span class="font-medium">${program.client_name}</span>
+                                </div>
+                            ` : ''}
+                        </div>
+                        
+                        <div class="flex justify-between items-center">
+                            <div class="text-sm text-gray-500">
+                                Créé ${new Date(program.created_at).toLocaleDateString('fr-FR')}
+                            </div>
+                            <div class="flex space-x-2">
+                                <button onclick="app.viewProgram(${program.id})" 
+                                        class="bg-gray-500 text-white px-3 py-1 rounded text-sm hover:bg-gray-600">
+                                    Voir
+                                </button>
+                                ${this.user.role === 'coach' ? `
+                                    <button onclick="app.editProgram(${program.id})" 
+                                            class="bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600">
+                                        Modifier
+                                    </button>
+                                ` : ''}
+                                ${this.user.role === 'client' ? `
+                                    <button onclick="app.startWorkout(${program.id})" 
+                                            class="bg-green-500 text-white px-3 py-1 rounded text-sm hover:bg-green-600">
+                                        Commencer
+                                    </button>
+                                ` : ''}
+                            </div>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+            
+            ${programs.length === 0 ? `
+                <div class="text-center py-12">
+                    <i class="fas fa-clipboard-list text-4xl text-gray-400 mb-4"></i>
+                    <h3 class="text-lg font-medium text-gray-900 mb-2">
+                        ${this.user.role === 'coach' ? 'Aucun programme créé' : 'Aucun programme assigné'}
+                    </h3>
+                    <p class="text-gray-600 mb-6">
+                        ${this.user.role === 'coach' ? 'Commencez par créer votre premier programme d\'entraînement.' : 'Votre coach n\'a pas encore créé de programmes pour vous.'}
+                    </p>
+                    ${this.user.role === 'coach' ? `
+                        <button onclick="app.showCreateProgramModal()" 
+                                class="bg-blue-500 text-white px-6 py-2 rounded-md hover:bg-blue-600">
+                            Créer mon premier programme
+                        </button>
+                    ` : ''}
+                </div>
+            ` : ''}
+            
+            <!-- Create Program Modal -->
+            <div id="create-program-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50">
+                <div class="flex items-center justify-center min-h-screen p-4">
+                    <div class="bg-white rounded-lg p-6 w-full max-w-2xl">
+                        <div class="flex justify-between items-center mb-6">
+                            <h3 class="text-lg font-semibold text-gray-900">Créer un nouveau programme</h3>
+                            <button onclick="app.hideCreateProgramModal()" class="text-gray-500 hover:text-gray-700">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                        
+                        <form id="create-program-form" class="space-y-4">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Nom du programme</label>
+                                    <input type="text" name="name" required 
+                                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                           placeholder="Programme Perte de Poids">
+                                </div>
+                                
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Type</label>
+                                    <select name="type" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                        <option value="mixed">Mixte</option>
+                                        <option value="strength">Musculation</option>
+                                        <option value="cardio">Cardio</option>
+                                        <option value="flexibility">Flexibilité</option>
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Durée (semaines)</label>
+                                    <input type="number" name="duration_weeks" min="1" max="52" 
+                                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                           placeholder="12">
+                                </div>
+                                
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Séances/semaine</label>
+                                    <input type="number" name="sessions_per_week" min="1" max="7" 
+                                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                           placeholder="3">
+                                </div>
+                                
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Niveau</label>
+                                    <select name="difficulty" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                        <option value="beginner">Débutant</option>
+                                        <option value="intermediate" selected>Intermédiaire</option>
+                                        <option value="advanced">Avancé</option>
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Client (optionnel)</label>
+                                <select name="client_id" id="client-select" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                    <option value="">Programme général (aucun client spécifique)</option>
+                                </select>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Description</label>
+                                <textarea name="description" rows="4" 
+                                          class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                          placeholder="Décrivez les objectifs et le contenu de ce programme..."></textarea>
+                            </div>
+                            
+                            <div class="flex justify-end space-x-3 pt-4">
+                                <button type="button" onclick="app.hideCreateProgramModal()" 
+                                        class="px-4 py-2 text-gray-600 bg-gray-200 rounded-md hover:bg-gray-300">
+                                    Annuler
+                                </button>
+                                <button type="submit" 
+                                        class="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600">
+                                    Créer le programme
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        `
+
+        // Load clients for the select dropdown
+        if (this.user.role === 'coach') {
+            this.loadClientsForSelect()
+        }
+
+        // Attach event listeners
+        this.attachProgramsEventListeners()
     }
 
     async loadWorkoutsModule() {
         const content = document.getElementById('module-content')
-        content.innerHTML = '<div class="text-center py-8">Module Séances en développement...</div>'
+        const response = await this.apiCall('/api/workouts')
+        
+        if (!response.success) {
+            content.innerHTML = '<div class="text-red-500">Erreur lors du chargement des séances</div>'
+            return
+        }
+
+        const workouts = response.data
+
+        content.innerHTML = `
+            <div class="mb-6 flex justify-between items-center">
+                <div>
+                    <h2 class="text-2xl font-bold text-gray-900 mb-2">
+                        ${this.user.role === 'coach' ? 'Séances de Mes Clients' : 'Mes Séances d\'Entraînement'}
+                    </h2>
+                    <p class="text-gray-600">
+                        ${this.user.role === 'coach' ? 'Suivez la progression de vos clients' : 'Votre historique d\'entraînement et prochaines séances'}
+                    </p>
+                </div>
+                ${this.user.role === 'coach' ? `
+                    <button onclick="app.showCreateWorkoutModal()" 
+                            class="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 flex items-center">
+                        <i class="fas fa-plus mr-2"></i>
+                        Nouvelle Séance
+                    </button>
+                ` : ''}
+            </div>
+
+            <!-- Filter Tabs -->
+            <div class="mb-6">
+                <div class="border-b border-gray-200">
+                    <nav class="-mb-px flex space-x-8">
+                        <button onclick="app.filterWorkouts('all')" 
+                                class="workout-filter-tab py-2 px-1 border-b-2 border-blue-500 font-medium text-sm text-blue-600"
+                                data-filter="all">
+                            Toutes
+                        </button>
+                        <button onclick="app.filterWorkouts('scheduled')" 
+                                class="workout-filter-tab py-2 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700"
+                                data-filter="scheduled">
+                            Prévues
+                        </button>
+                        <button onclick="app.filterWorkouts('completed')" 
+                                class="workout-filter-tab py-2 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700"
+                                data-filter="completed">
+                            Terminées
+                        </button>
+                        <button onclick="app.filterWorkouts('in_progress')" 
+                                class="workout-filter-tab py-2 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700"
+                                data-filter="in_progress">
+                            En cours
+                        </button>
+                    </nav>
+                </div>
+            </div>
+
+            <!-- Workouts List -->
+            <div class="space-y-4" id="workouts-list">
+                ${workouts.map(workout => `
+                    <div class="bg-white border rounded-lg p-6 hover:shadow-md transition-shadow workout-item" 
+                         data-status="${workout.status}">
+                        <div class="flex justify-between items-start">
+                            <div class="flex-1">
+                                <div class="flex items-center mb-2">
+                                    <h3 class="font-semibold text-gray-900 mr-3">${workout.name || 'Séance sans nom'}</h3>
+                                    <span class="inline-block px-2 py-1 text-xs font-medium rounded-full ${this.getWorkoutStatusClass(workout.status)}">
+                                        ${this.getWorkoutStatusLabel(workout.status)}
+                                    </span>
+                                    ${workout.program_name ? `
+                                        <span class="ml-2 inline-block px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full">
+                                            ${workout.program_name}
+                                        </span>
+                                    ` : ''}
+                                </div>
+                                
+                                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4 text-sm text-gray-600">
+                                    <div class="flex items-center">
+                                        <i class="fas fa-calendar-alt mr-2 text-gray-400"></i>
+                                        ${workout.scheduled_date ? new Date(workout.scheduled_date).toLocaleDateString('fr-FR') : 'Non planifiée'}
+                                    </div>
+                                    <div class="flex items-center">
+                                        <i class="fas fa-clock mr-2 text-gray-400"></i>
+                                        ${workout.duration_minutes ? workout.duration_minutes + ' min' : 'N/A'}
+                                    </div>
+                                    <div class="flex items-center">
+                                        <i class="fas fa-dumbbell mr-2 text-gray-400"></i>
+                                        ${workout.exercise_count || 0} exercices
+                                    </div>
+                                    <div class="flex items-center">
+                                        <i class="fas fa-weight-hanging mr-2 text-gray-400"></i>
+                                        ${workout.total_volume || 0} kg
+                                    </div>
+                                </div>
+
+                                ${this.user.role === 'coach' && workout.client_name ? `
+                                    <div class="flex items-center mb-2">
+                                        <i class="fas fa-user mr-2 text-gray-400"></i>
+                                        <span class="text-sm text-gray-600">Client: <strong>${workout.client_name}</strong></span>
+                                    </div>
+                                ` : ''}
+
+                                ${workout.notes ? `
+                                    <p class="text-sm text-gray-600 mb-4">${workout.notes}</p>
+                                ` : ''}
+                            </div>
+                            
+                            <div class="flex flex-col items-end space-y-2">
+                                ${workout.status === 'scheduled' && this.user.role === 'client' ? `
+                                    <button onclick="app.startWorkoutSession(${workout.id})" 
+                                            class="bg-green-500 text-white px-4 py-2 rounded-md hover:bg-green-600 flex items-center text-sm">
+                                        <i class="fas fa-play mr-2"></i>
+                                        Commencer
+                                    </button>
+                                ` : ''}
+                                
+                                ${workout.status === 'in_progress' && this.user.role === 'client' ? `
+                                    <button onclick="app.continueWorkoutSession(${workout.id})" 
+                                            class="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 flex items-center text-sm">
+                                        <i class="fas fa-play mr-2"></i>
+                                        Continuer
+                                    </button>
+                                ` : ''}
+                                
+                                <button onclick="app.viewWorkoutDetails(${workout.id})" 
+                                        class="bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600 flex items-center text-sm">
+                                    <i class="fas fa-eye mr-2"></i>
+                                    Voir
+                                </button>
+                                
+                                ${this.user.role === 'coach' ? `
+                                    <button onclick="app.editWorkout(${workout.id})" 
+                                            class="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 flex items-center text-sm">
+                                        <i class="fas fa-edit mr-2"></i>
+                                        Modifier
+                                    </button>
+                                ` : ''}
+                            </div>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+            
+            ${workouts.length === 0 ? `
+                <div class="text-center py-12">
+                    <i class="fas fa-dumbbell text-4xl text-gray-400 mb-4"></i>
+                    <h3 class="text-lg font-medium text-gray-900 mb-2">
+                        ${this.user.role === 'coach' ? 'Aucune séance créée' : 'Aucune séance disponible'}
+                    </h3>
+                    <p class="text-gray-600 mb-6">
+                        ${this.user.role === 'coach' ? 'Créez des séances d\'entraînement pour vos clients.' : 'Vos séances apparaîtront ici une fois créées par votre coach.'}
+                    </p>
+                    ${this.user.role === 'coach' ? `
+                        <button onclick="app.showCreateWorkoutModal()" 
+                                class="bg-blue-500 text-white px-6 py-2 rounded-md hover:bg-blue-600">
+                            Créer ma première séance
+                        </button>
+                    ` : ''}
+                </div>
+            ` : ''}
+            
+            <!-- Create Workout Modal -->
+            ${this.user.role === 'coach' ? `
+                <div id="create-workout-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50">
+                    <div class="flex items-center justify-center min-h-screen p-4">
+                        <div class="bg-white rounded-lg p-6 w-full max-w-2xl">
+                            <div class="flex justify-between items-center mb-6">
+                                <h3 class="text-lg font-semibold text-gray-900">Créer une nouvelle séance</h3>
+                                <button onclick="app.hideCreateWorkoutModal()" class="text-gray-500 hover:text-gray-700">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                            
+                            <form id="create-workout-form" class="space-y-4">
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-2">Nom de la séance</label>
+                                        <input type="text" name="name" required 
+                                               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                               placeholder="Séance Haut du Corps">
+                                    </div>
+                                    
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-2">Durée estimée (min)</label>
+                                        <input type="number" name="duration_minutes" min="1" max="300"
+                                               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                               placeholder="60">
+                                    </div>
+                                </div>
+                                
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-2">Programme</label>
+                                        <select name="program_id" id="workout-program-select" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                            <option value="">Séance indépendante</option>
+                                        </select>
+                                    </div>
+                                    
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-2">Client</label>
+                                        <select name="client_id" id="workout-client-select" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                            <option value="">Sélectionner un client</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Date prévue</label>
+                                    <input type="date" name="scheduled_date" 
+                                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                </div>
+                                
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Notes</label>
+                                    <textarea name="notes" rows="3" 
+                                              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                              placeholder="Instructions spécifiques, échauffement recommandé..."></textarea>
+                                </div>
+                                
+                                <div class="flex justify-end space-x-3 pt-4">
+                                    <button type="button" onclick="app.hideCreateWorkoutModal()" 
+                                            class="px-4 py-2 text-gray-600 bg-gray-200 rounded-md hover:bg-gray-300">
+                                        Annuler
+                                    </button>
+                                    <button type="submit" 
+                                            class="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600">
+                                        Créer la séance
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            ` : ''}
+        `
+
+        // Load data for selects
+        if (this.user.role === 'coach') {
+            this.loadProgramsForWorkoutSelect()
+            this.loadClientsForWorkoutSelect()
+        }
+
+        // Attach event listeners
+        this.attachWorkoutsEventListeners()
     }
 
     async loadNutritionModule() {
         const content = document.getElementById('module-content')
-        content.innerHTML = '<div class="text-center py-8">Module Nutrition en développement...</div>'
+        
+        // Load nutrition data and goals
+        const [mealsResponse, goalsResponse] = await Promise.all([
+            this.apiCall('/api/nutrition/meals'),
+            this.apiCall('/api/nutrition/goals')
+        ])
+
+        if (!mealsResponse.success) {
+            content.innerHTML = '<div class="text-red-500">Erreur lors du chargement des données nutritionnelles</div>'
+            return
+        }
+
+        const meals = mealsResponse.data || []
+        const goals = goalsResponse.success ? goalsResponse.data : null
+
+        // Calculate today's stats
+        const today = new Date().toISOString().split('T')[0]
+        const todayMeals = meals.filter(meal => meal.logged_at && meal.logged_at.startsWith(today))
+        const todayStats = this.calculateNutritionStats(todayMeals)
+
+        content.innerHTML = `
+            <div class="mb-6">
+                <h2 class="text-2xl font-bold text-gray-900 mb-2">Suivi Nutritionnel</h2>
+                <p class="text-gray-600">Suivez votre alimentation et atteignez vos objectifs</p>
+            </div>
+
+            <!-- Today's Progress -->
+            <div class="bg-white rounded-lg shadow-sm p-6 mb-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-semibold text-gray-900">Aujourd'hui - ${new Date().toLocaleDateString('fr-FR')}</h3>
+                    <button onclick="app.showAddMealModal()" 
+                            class="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 flex items-center text-sm">
+                        <i class="fas fa-plus mr-2"></i>
+                        Ajouter un repas
+                    </button>
+                </div>
+
+                <!-- Macro Rings -->
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+                    <div class="text-center">
+                        <div class="macro-ring mx-auto mb-2" style="width: 80px; height: 80px;">
+                            <svg class="transform -rotate-90" width="80" height="80">
+                                <circle cx="40" cy="40" r="36" class="ring-background"></circle>
+                                <circle cx="40" cy="40" r="36" class="ring-progress" 
+                                        style="stroke: #3b82f6; stroke-dasharray: ${this.calculateRingProgress(todayStats.calories, goals?.daily_calories || 2000)} 226.2;">
+                                </circle>
+                            </svg>
+                            <div class="ring-text">
+                                <div class="font-bold text-sm">${Math.round(todayStats.calories)}</div>
+                                <div class="text-xs text-gray-600">kcal</div>
+                            </div>
+                        </div>
+                        <div class="text-xs text-gray-600">Objectif: ${goals?.daily_calories || 2000}</div>
+                    </div>
+
+                    <div class="text-center">
+                        <div class="macro-ring mx-auto mb-2" style="width: 80px; height: 80px;">
+                            <svg class="transform -rotate-90" width="80" height="80">
+                                <circle cx="40" cy="40" r="36" class="ring-background"></circle>
+                                <circle cx="40" cy="40" r="36" class="ring-progress" 
+                                        style="stroke: #10b981; stroke-dasharray: ${this.calculateRingProgress(todayStats.protein, goals?.protein_target || 150)} 226.2;">
+                                </circle>
+                            </svg>
+                            <div class="ring-text">
+                                <div class="font-bold text-sm">${Math.round(todayStats.protein)}</div>
+                                <div class="text-xs text-gray-600">g</div>
+                            </div>
+                        </div>
+                        <div class="text-xs text-gray-600">Protéines: ${goals?.protein_target || 150}g</div>
+                    </div>
+
+                    <div class="text-center">
+                        <div class="macro-ring mx-auto mb-2" style="width: 80px; height: 80px;">
+                            <svg class="transform -rotate-90" width="80" height="80">
+                                <circle cx="40" cy="40" r="36" class="ring-background"></circle>
+                                <circle cx="40" cy="40" r="36" class="ring-progress" 
+                                        style="stroke: #f59e0b; stroke-dasharray: ${this.calculateRingProgress(todayStats.carbs, goals?.carbs_target || 250)} 226.2;">
+                                </circle>
+                            </svg>
+                            <div class="ring-text">
+                                <div class="font-bold text-sm">${Math.round(todayStats.carbs)}</div>
+                                <div class="text-xs text-gray-600">g</div>
+                            </div>
+                        </div>
+                        <div class="text-xs text-gray-600">Glucides: ${goals?.carbs_target || 250}g</div>
+                    </div>
+
+                    <div class="text-center">
+                        <div class="macro-ring mx-auto mb-2" style="width: 80px; height: 80px;">
+                            <svg class="transform -rotate-90" width="80" height="80">
+                                <circle cx="40" cy="40" r="36" class="ring-background"></circle>
+                                <circle cx="40" cy="40" r="36" class="ring-progress" 
+                                        style="stroke: #ef4444; stroke-dasharray: ${this.calculateRingProgress(todayStats.fat, goals?.fat_target || 80)} 226.2;">
+                                </circle>
+                            </svg>
+                            <div class="ring-text">
+                                <div class="font-bold text-sm">${Math.round(todayStats.fat)}</div>
+                                <div class="text-xs text-gray-600">g</div>
+                            </div>
+                        </div>
+                        <div class="text-xs text-gray-600">Lipides: ${goals?.fat_target || 80}g</div>
+                    </div>
+                </div>
+
+                <!-- Quick Stats -->
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                    <div class="text-center p-3 bg-gray-50 rounded">
+                        <div class="font-semibold">${todayMeals.length}</div>
+                        <div class="text-gray-600">Repas</div>
+                    </div>
+                    <div class="text-center p-3 bg-gray-50 rounded">
+                        <div class="font-semibold">${Math.round((todayStats.protein / todayStats.calories) * 100) || 0}%</div>
+                        <div class="text-gray-600">Protéines</div>
+                    </div>
+                    <div class="text-center p-3 bg-gray-50 rounded">
+                        <div class="font-semibold">${Math.round((todayStats.carbs / todayStats.calories) * 100) || 0}%</div>
+                        <div class="text-gray-600">Glucides</div>
+                    </div>
+                    <div class="text-center p-3 bg-gray-50 rounded">
+                        <div class="font-semibold">${Math.round((todayStats.fat / todayStats.calories) * 100) || 0}%</div>
+                        <div class="text-gray-600">Lipides</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Meals -->
+            <div class="bg-white rounded-lg shadow-sm p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-semibold text-gray-900">Repas Récents</h3>
+                    <div class="flex space-x-2">
+                        <button onclick="app.showNutritionGoalsModal()" 
+                                class="text-gray-600 hover:text-gray-800 px-3 py-1 rounded border">
+                            <i class="fas fa-target mr-1"></i>
+                            Objectifs
+                        </button>
+                        <button onclick="app.showNutritionHistory()" 
+                                class="text-gray-600 hover:text-gray-800 px-3 py-1 rounded border">
+                            <i class="fas fa-chart-line mr-1"></i>
+                            Historique
+                        </button>
+                    </div>
+                </div>
+
+                <div class="space-y-3">
+                    ${meals.slice(0, 10).map(meal => `
+                        <div class="flex justify-between items-center p-3 border rounded-lg hover:bg-gray-50">
+                            <div class="flex-1">
+                                <div class="flex items-center">
+                                    <h4 class="font-medium text-gray-900 mr-2">${meal.meal_name}</h4>
+                                    <span class="text-xs px-2 py-1 bg-blue-100 text-blue-800 rounded-full">
+                                        ${this.getMealTypeLabel(meal.meal_type)}
+                                    </span>
+                                </div>
+                                <div class="text-sm text-gray-600 mt-1">
+                                    ${Math.round(meal.calories)} kcal • 
+                                    ${Math.round(meal.protein)}g protéines • 
+                                    ${Math.round(meal.carbs)}g glucides • 
+                                    ${Math.round(meal.fat)}g lipides
+                                </div>
+                                <div class="text-xs text-gray-500 mt-1">
+                                    ${new Date(meal.logged_at).toLocaleString('fr-FR')}
+                                </div>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <button onclick="app.editMeal(${meal.id})" 
+                                        class="text-gray-500 hover:text-blue-600">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button onclick="app.deleteMeal(${meal.id})" 
+                                        class="text-gray-500 hover:text-red-600">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+
+                ${meals.length === 0 ? `
+                    <div class="text-center py-8">
+                        <i class="fas fa-apple-alt text-4xl text-gray-400 mb-4"></i>
+                        <h4 class="text-lg font-medium text-gray-900 mb-2">Aucun repas enregistré</h4>
+                        <p class="text-gray-600 mb-4">Commencez à suivre votre alimentation dès maintenant!</p>
+                        <button onclick="app.showAddMealModal()" 
+                                class="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600">
+                            Ajouter mon premier repas
+                        </button>
+                    </div>
+                ` : ''}
+            </div>
+
+            <!-- Add Meal Modal -->
+            <div id="add-meal-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50">
+                <div class="flex items-center justify-center min-h-screen p-4">
+                    <div class="bg-white rounded-lg p-6 w-full max-w-md">
+                        <div class="flex justify-between items-center mb-6">
+                            <h3 class="text-lg font-semibold text-gray-900">Ajouter un repas</h3>
+                            <button onclick="app.hideAddMealModal()" class="text-gray-500 hover:text-gray-700">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                        
+                        <form id="add-meal-form" class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Nom du repas</label>
+                                <input type="text" name="meal_name" required 
+                                       class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                       placeholder="Salade de poulet">
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Type de repas</label>
+                                <select name="meal_type" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                    <option value="breakfast">Petit-déjeuner</option>
+                                    <option value="lunch">Déjeuner</option>
+                                    <option value="dinner">Dîner</option>
+                                    <option value="snack">Collation</option>
+                                </select>
+                            </div>
+                            
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Calories</label>
+                                    <input type="number" name="calories" step="0.1" required 
+                                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Protéines (g)</label>
+                                    <input type="number" name="protein" step="0.1" required 
+                                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                </div>
+                            </div>
+                            
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Glucides (g)</label>
+                                    <input type="number" name="carbs" step="0.1" required 
+                                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Lipides (g)</label>
+                                    <input type="number" name="fat" step="0.1" required 
+                                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                </div>
+                            </div>
+                            
+                            <div class="flex justify-end space-x-3 pt-4">
+                                <button type="button" onclick="app.hideAddMealModal()" 
+                                        class="px-4 py-2 text-gray-600 bg-gray-200 rounded-md hover:bg-gray-300">
+                                    Annuler
+                                </button>
+                                <button type="submit" 
+                                        class="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600">
+                                    Ajouter
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        `
+
+        this.attachNutritionEventListeners()
     }
 
     async loadAppointmentsModule() {
         const content = document.getElementById('module-content')
-        content.innerHTML = '<div class="text-center py-8">Module Rendez-vous en développement...</div>'
+        const response = await this.apiCall('/api/appointments')
+        
+        if (!response.success) {
+            content.innerHTML = '<div class="text-red-500">Erreur lors du chargement des rendez-vous</div>'
+            return
+        }
+
+        const appointments = response.data || []
+
+        // Group appointments by date for calendar view
+        const appointmentsByDate = {}
+        appointments.forEach(apt => {
+            if (apt.scheduled_at) {
+                const date = apt.scheduled_at.split('T')[0]
+                if (!appointmentsByDate[date]) {
+                    appointmentsByDate[date] = []
+                }
+                appointmentsByDate[date].push(apt)
+            }
+        })
+
+        content.innerHTML = `
+            <div class="mb-6 flex justify-between items-center">
+                <div>
+                    <h2 class="text-2xl font-bold text-gray-900 mb-2">
+                        ${this.user.role === 'coach' ? 'Mes Rendez-vous' : 'Mes Rendez-vous'}
+                    </h2>
+                    <p class="text-gray-600">
+                        ${this.user.role === 'coach' ? 'Gérez vos créneaux et consultations' : 'Vos rendez-vous avec votre coach'}
+                    </p>
+                </div>
+                <button onclick="app.showCreateAppointmentModal()" 
+                        class="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 flex items-center">
+                    <i class="fas fa-plus mr-2"></i>
+                    ${this.user.role === 'coach' ? 'Créer un créneau' : 'Demander un RDV'}
+                </button>
+            </div>
+
+            <div class="bg-white rounded-lg shadow-sm p-6 mb-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-semibold text-gray-900">Calendrier du mois</h3>
+                    <div class="flex items-center space-x-2">
+                        <button onclick="app.previousMonth()" class="p-2 text-gray-500 hover:text-gray-700">
+                            <i class="fas fa-chevron-left"></i>
+                        </button>
+                        <span id="current-month-year" class="font-medium"></span>
+                        <button onclick="app.nextMonth()" class="p-2 text-gray-500 hover:text-gray-700">
+                            <i class="fas fa-chevron-right"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div id="calendar-grid" class="grid grid-cols-7 gap-1 mb-4">
+                    <!-- Calendar will be generated here -->
+                </div>
+            </div>
+
+            <!-- Appointments List -->
+            <div class="bg-white rounded-lg shadow-sm p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-semibold text-gray-900">Rendez-vous</h3>
+                    <div class="flex space-x-2">
+                        <button onclick="app.filterAppointments('all')" 
+                                class="appointment-filter-tab px-3 py-1 text-sm rounded-md bg-blue-500 text-white"
+                                data-filter="all">
+                            Tous
+                        </button>
+                        <button onclick="app.filterAppointments('scheduled')" 
+                                class="appointment-filter-tab px-3 py-1 text-sm rounded-md text-gray-600 hover:bg-gray-100"
+                                data-filter="scheduled">
+                            Prévus
+                        </button>
+                        <button onclick="app.filterAppointments('confirmed')" 
+                                class="appointment-filter-tab px-3 py-1 text-sm rounded-md text-gray-600 hover:bg-gray-100"
+                                data-filter="confirmed">
+                            Confirmés
+                        </button>
+                        <button onclick="app.filterAppointments('completed')" 
+                                class="appointment-filter-tab px-3 py-1 text-sm rounded-md text-gray-600 hover:bg-gray-100"
+                                data-filter="completed">
+                            Terminés
+                        </button>
+                    </div>
+                </div>
+
+                <div class="space-y-4" id="appointments-list">
+                    ${appointments.map(apt => `
+                        <div class="appointment-item border rounded-lg p-4 hover:shadow-md transition-shadow" 
+                             data-status="${apt.status}">
+                            <div class="flex justify-between items-start">
+                                <div class="flex-1">
+                                    <div class="flex items-center mb-2">
+                                        <h4 class="font-medium text-gray-900 mr-3">
+                                            ${apt.type === 'consultation' ? '💬' : 
+                                              apt.type === 'training' ? '🏋️' :
+                                              apt.type === 'nutrition' ? '🥗' : '📋'} 
+                                            ${this.getAppointmentTypeLabel(apt.type)}
+                                        </h4>
+                                        <span class="inline-block px-2 py-1 text-xs font-medium rounded-full ${this.getAppointmentStatusClass(apt.status)}">
+                                            ${this.getAppointmentStatusLabel(apt.status)}
+                                        </span>
+                                    </div>
+                                    
+                                    <div class="grid grid-cols-2 md:grid-cols-3 gap-4 mb-3 text-sm text-gray-600">
+                                        <div class="flex items-center">
+                                            <i class="fas fa-calendar mr-2 text-gray-400"></i>
+                                            ${new Date(apt.scheduled_at).toLocaleDateString('fr-FR')}
+                                        </div>
+                                        <div class="flex items-center">
+                                            <i class="fas fa-clock mr-2 text-gray-400"></i>
+                                            ${new Date(apt.scheduled_at).toLocaleTimeString('fr-FR', { 
+                                                hour: '2-digit', 
+                                                minute: '2-digit' 
+                                            })} (${apt.duration_minutes}min)
+                                        </div>
+                                        <div class="flex items-center">
+                                            <i class="fas fa-user mr-2 text-gray-400"></i>
+                                            ${this.user.role === 'coach' ? apt.client_name : apt.coach_name}
+                                        </div>
+                                    </div>
+
+                                    ${apt.notes ? `
+                                        <p class="text-sm text-gray-600 mb-3">${apt.notes}</p>
+                                    ` : ''}
+                                </div>
+                                
+                                <div class="flex flex-col items-end space-y-2">
+                                    ${apt.status === 'scheduled' && this.user.role === 'client' ? `
+                                        <button onclick="app.confirmAppointment(${apt.id})" 
+                                                class="bg-green-500 text-white px-3 py-1 rounded text-sm hover:bg-green-600">
+                                            Confirmer
+                                        </button>
+                                    ` : ''}
+                                    
+                                    ${apt.status === 'confirmed' && new Date(apt.scheduled_at) <= new Date() ? `
+                                        <button onclick="app.completeAppointment(${apt.id})" 
+                                                class="bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600">
+                                            Marquer terminé
+                                        </button>
+                                    ` : ''}
+                                    
+                                    <button onclick="app.viewAppointmentDetails(${apt.id})" 
+                                            class="bg-gray-500 text-white px-3 py-1 rounded text-sm hover:bg-gray-600">
+                                        Détails
+                                    </button>
+                                    
+                                    ${apt.status === 'scheduled' || apt.status === 'confirmed' ? `
+                                        <button onclick="app.cancelAppointment(${apt.id})" 
+                                                class="bg-red-500 text-white px-3 py-1 rounded text-sm hover:bg-red-600">
+                                            Annuler
+                                        </button>
+                                    ` : ''}
+                                </div>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+
+                ${appointments.length === 0 ? `
+                    <div class="text-center py-12">
+                        <i class="fas fa-calendar text-4xl text-gray-400 mb-4"></i>
+                        <h4 class="text-lg font-medium text-gray-900 mb-2">Aucun rendez-vous</h4>
+                        <p class="text-gray-600 mb-6">
+                            ${this.user.role === 'coach' ? 'Créez des créneaux pour vos clients' : 'Demandez un rendez-vous à votre coach'}
+                        </p>
+                        <button onclick="app.showCreateAppointmentModal()" 
+                                class="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600">
+                            ${this.user.role === 'coach' ? 'Créer un créneau' : 'Demander un RDV'}
+                        </button>
+                    </div>
+                ` : ''}
+            </div>
+
+            <!-- Create Appointment Modal -->
+            <div id="create-appointment-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50">
+                <div class="flex items-center justify-center min-h-screen p-4">
+                    <div class="bg-white rounded-lg p-6 w-full max-w-md">
+                        <div class="flex justify-between items-center mb-6">
+                            <h3 class="text-lg font-semibold text-gray-900">
+                                ${this.user.role === 'coach' ? 'Créer un créneau' : 'Demander un rendez-vous'}
+                            </h3>
+                            <button onclick="app.hideCreateAppointmentModal()" class="text-gray-500 hover:text-gray-700">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                        
+                        <form id="create-appointment-form" class="space-y-4">
+                            ${this.user.role === 'client' ? `
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Coach</label>
+                                    <select name="coach_id" id="appointment-coach-select" required 
+                                            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                        <option value="">Sélectionner un coach</option>
+                                    </select>
+                                </div>
+                            ` : `
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Client</label>
+                                    <select name="client_id" id="appointment-client-select" 
+                                            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                        <option value="">Optionnel - Créneau libre</option>
+                                    </select>
+                                </div>
+                            `}
+                            
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Type de rendez-vous</label>
+                                <select name="type" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                    <option value="consultation">Consultation</option>
+                                    <option value="training">Séance d'entraînement</option>
+                                    <option value="nutrition">Conseil nutritionnel</option>
+                                    <option value="assessment">Évaluation</option>
+                                </select>
+                            </div>
+                            
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Date</label>
+                                    <input type="date" name="scheduled_date" required 
+                                           min="${new Date().toISOString().split('T')[0]}"
+                                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Heure</label>
+                                    <input type="time" name="scheduled_time" required 
+                                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Durée (minutes)</label>
+                                <select name="duration_minutes" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                    <option value="30">30 minutes</option>
+                                    <option value="60" selected>1 heure</option>
+                                    <option value="90">1h30</option>
+                                    <option value="120">2 heures</option>
+                                </select>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Notes</label>
+                                <textarea name="notes" rows="3" 
+                                          class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                          placeholder="Objectifs, besoins spécifiques..."></textarea>
+                            </div>
+                            
+                            <div class="flex justify-end space-x-3 pt-4">
+                                <button type="button" onclick="app.hideCreateAppointmentModal()" 
+                                        class="px-4 py-2 text-gray-600 bg-gray-200 rounded-md hover:bg-gray-300">
+                                    Annuler
+                                </button>
+                                <button type="submit" 
+                                        class="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600">
+                                    ${this.user.role === 'coach' ? 'Créer' : 'Demander'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        `
+
+        // Initialize calendar
+        this.currentCalendarDate = new Date()
+        this.appointmentsByDate = appointmentsByDate
+        this.renderCalendar()
+
+        // Load data for selects
+        this.loadAppointmentParticipants()
+        this.attachAppointmentsEventListeners()
     }
 
     async loadMessagesModule() {
         const content = document.getElementById('module-content')
-        content.innerHTML = '<div class="text-center py-8">Module Messages en développement...</div>'
+        
+        // Load conversations and messages
+        const [conversationsResponse, messagesResponse] = await Promise.all([
+            this.apiCall('/api/messages/conversations'),
+            this.apiCall('/api/messages?limit=50')
+        ])
+
+        if (!conversationsResponse.success || !messagesResponse.success) {
+            content.innerHTML = '<div class="text-red-500">Erreur lors du chargement des messages</div>'
+            return
+        }
+
+        const conversations = conversationsResponse.data || []
+        const messages = messagesResponse.data || []
+
+        content.innerHTML = `
+            <div class="mb-6">
+                <h2 class="text-2xl font-bold text-gray-900 mb-2">Messages</h2>
+                <p class="text-gray-600">Communiquez avec ${this.user.role === 'coach' ? 'vos clients' : 'vos coaches'}</p>
+            </div>
+
+            <div class="bg-white rounded-lg shadow-sm overflow-hidden" style="height: 70vh;">
+                <div class="flex h-full">
+                    <!-- Conversations Sidebar -->
+                    <div class="w-1/3 border-r border-gray-200 flex flex-col">
+                        <div class="p-4 border-b border-gray-200">
+                            <div class="flex justify-between items-center">
+                                <h3 class="font-semibold text-gray-900">Conversations</h3>
+                                <button onclick="app.showNewMessageModal()" 
+                                        class="text-blue-500 hover:text-blue-700">
+                                    <i class="fas fa-plus"></i>
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="flex-1 overflow-y-auto" id="conversations-list">
+                            ${conversations.map(conv => `
+                                <div class="conversation-item p-4 border-b border-gray-100 hover:bg-gray-50 cursor-pointer" 
+                                     data-conversation-id="${conv.conversation_with_id || conv.user1_id + '-' + conv.user2_id}"
+                                     onclick="app.selectConversation(${conv.conversation_with_id || conv.user1_id}, '${conv.conversation_with_name || conv.user1_name}')">
+                                    <div class="flex items-center justify-between">
+                                        <div class="flex items-center">
+                                            <div class="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold text-sm">
+                                                ${(conv.conversation_with_name || conv.user1_name || '?').charAt(0)}
+                                            </div>
+                                            <div class="ml-3 flex-1">
+                                                <div class="font-medium text-gray-900">
+                                                    ${conv.conversation_with_name || conv.user1_name || 'Utilisateur'}
+                                                </div>
+                                                <div class="text-sm text-gray-600 truncate">
+                                                    ${conv.last_message_content || conv.conversation_with_role || 'Aucun message'}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="text-right">
+                                            ${conv.unread_count > 0 ? `
+                                                <div class="bg-blue-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                                                    ${conv.unread_count}
+                                                </div>
+                                            ` : ''}
+                                            <div class="text-xs text-gray-500 mt-1">
+                                                ${conv.last_message_at ? new Date(conv.last_message_at).toLocaleDateString('fr-FR') : ''}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            `).join('')}
+                            
+                            ${conversations.length === 0 ? `
+                                <div class="p-8 text-center text-gray-500">
+                                    <i class="fas fa-comments text-3xl mb-4"></i>
+                                    <p>Aucune conversation</p>
+                                    <button onclick="app.showNewMessageModal()" 
+                                            class="mt-2 text-blue-500 hover:text-blue-700 text-sm">
+                                        Commencer une conversation
+                                    </button>
+                                </div>
+                            ` : ''}
+                        </div>
+                    </div>
+
+                    <!-- Messages Area -->
+                    <div class="flex-1 flex flex-col">
+                        <div id="messages-header" class="p-4 border-b border-gray-200 hidden">
+                            <div class="flex items-center">
+                                <div class="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center text-white font-bold text-sm">
+                                    <span id="chat-participant-initial">?</span>
+                                </div>
+                                <div class="ml-3">
+                                    <div class="font-medium text-gray-900" id="chat-participant-name">Sélectionner une conversation</div>
+                                    <div class="text-sm text-gray-600" id="chat-participant-role"></div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div id="messages-content" class="flex-1 overflow-y-auto p-4">
+                            <div class="h-full flex items-center justify-center text-gray-500">
+                                <div class="text-center">
+                                    <i class="fas fa-comments text-4xl mb-4"></i>
+                                    <p>Sélectionnez une conversation pour commencer</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div id="message-input-area" class="p-4 border-t border-gray-200 hidden">
+                            <form id="send-message-form" class="flex">
+                                <input type="text" id="message-input" placeholder="Tapez votre message..." 
+                                       class="flex-1 px-4 py-2 border border-gray-300 rounded-l-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                <input type="hidden" id="recipient-id">
+                                <button type="submit" 
+                                        class="px-6 py-2 bg-blue-500 text-white rounded-r-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                    <i class="fas fa-paper-plane"></i>
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- New Message Modal -->
+            <div id="new-message-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50">
+                <div class="flex items-center justify-center min-h-screen p-4">
+                    <div class="bg-white rounded-lg p-6 w-full max-w-md">
+                        <div class="flex justify-between items-center mb-6">
+                            <h3 class="text-lg font-semibold text-gray-900">Nouveau message</h3>
+                            <button onclick="app.hideNewMessageModal()" class="text-gray-500 hover:text-gray-700">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                        
+                        <form id="new-message-form" class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">
+                                    ${this.user.role === 'coach' ? 'Client' : 'Coach'}
+                                </label>
+                                <select name="recipient_id" id="new-message-recipient" required 
+                                        class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                    <option value="">Sélectionner...</option>
+                                </select>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Message</label>
+                                <textarea name="content" rows="4" required 
+                                          class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                          placeholder="Tapez votre message..."></textarea>
+                            </div>
+                            
+                            <div class="flex justify-end space-x-3">
+                                <button type="button" onclick="app.hideNewMessageModal()" 
+                                        class="px-4 py-2 text-gray-600 bg-gray-200 rounded-md hover:bg-gray-300">
+                                    Annuler
+                                </button>
+                                <button type="submit" 
+                                        class="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600">
+                                    Envoyer
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        `
+
+        // Load recipients for new message
+        this.loadMessageRecipients()
+        
+        // Attach event listeners
+        this.attachMessagesEventListeners()
+        
+        // Auto-select first conversation if available
+        if (conversations.length > 0) {
+            const firstConv = conversations[0]
+            this.selectConversation(
+                firstConv.conversation_with_id || firstConv.user1_id, 
+                firstConv.conversation_with_name || firstConv.user1_name
+            )
+        }
     }
 
     async loadProfileModule() {
