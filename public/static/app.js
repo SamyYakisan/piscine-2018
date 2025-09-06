@@ -4,6 +4,9 @@ class CoachFitApp {
         this.user = null
         this.token = localStorage.getItem('coachfit_token')
         this.currentModule = 'dashboard'
+        this.notifications = []
+        this.unreadCount = 0
+        this.notificationInterval = null
         this.init()
     }
 
@@ -74,14 +77,18 @@ class CoachFitApp {
             localStorage.setItem('coachfit_token', this.token)
             this.render()
             this.loadDashboard()
+            this.startNotificationPolling()
         }
         
         return response
     }
 
     logout() {
+        this.stopNotificationPolling()
         this.token = null
         this.user = null
+        this.notifications = []
+        this.unreadCount = 0
         localStorage.removeItem('coachfit_token')
         this.render()
     }
@@ -188,6 +195,34 @@ class CoachFitApp {
                             </div>
                             
                             <div class="flex items-center space-x-4">
+                                <!-- Notifications Bell -->
+                                <div class="relative">
+                                    <button id="notifications-btn" class="relative text-gray-600 hover:text-gray-800 p-2">
+                                        <i class="fas fa-bell text-lg"></i>
+                                        <span id="notifications-badge" class="hidden absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">0</span>
+                                    </button>
+                                    
+                                    <!-- Notifications Dropdown -->
+                                    <div id="notifications-dropdown" class="hidden absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-lg border z-50 max-h-96 overflow-y-auto">
+                                        <div class="p-4 border-b">
+                                            <div class="flex items-center justify-between">
+                                                <h3 class="text-lg font-semibold text-gray-900">Notifications</h3>
+                                                <button id="mark-all-read" class="text-sm text-blue-600 hover:text-blue-800">
+                                                    Marquer tout lu
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div id="notifications-list" class="max-h-64 overflow-y-auto">
+                                            <!-- Notifications will be loaded here -->
+                                        </div>
+                                        <div class="p-3 border-t text-center">
+                                            <button class="text-sm text-blue-600 hover:text-blue-800">
+                                                Voir toutes les notifications
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
                                 <span class="text-sm text-gray-700">
                                     <i class="fas fa-user-circle mr-1"></i>
                                     ${this.user.name} (${this.user.role})
@@ -340,6 +375,14 @@ class CoachFitApp {
                 this.loadModule(module)
             })
         })
+
+        // Notifications listeners
+        this.attachNotificationListeners()
+        
+        // Start real-time notifications if user is logged in
+        if (this.user) {
+            this.startNotificationPolling()
+        }
     }
 
     async loadModule(module) {
@@ -390,6 +433,9 @@ class CoachFitApp {
                     break
                 case 'profile':
                     await this.loadProfileModule()
+                    break
+                case 'analytics':
+                    await this.loadAnalyticsModule()
                     break
                 default:
                     content.innerHTML = '<div class="text-center py-8">Module en développement...</div>'
@@ -2842,6 +2888,948 @@ class CoachFitApp {
             )
         }
     }
+
+    async loadAnalyticsModule() {
+        const content = document.getElementById('module-content')
+        
+        try {
+            // Get analytics data
+            const analyticsData = await this.getAnalyticsData()
+            
+            content.innerHTML = `
+                <div class="mb-6">
+                    <h2 class="text-2xl font-bold text-gray-900 mb-2">
+                        <i class="fas fa-chart-line text-blue-500 mr-2"></i>
+                        Analytics & Statistiques
+                    </h2>
+                    <p class="text-gray-600">Vue d'ensemble des performances et de l'engagement</p>
+                </div>
+
+                <!-- Time Period Filter -->
+                <div class="mb-6">
+                    <div class="flex space-x-2">
+                        <button class="analytics-period-btn px-4 py-2 bg-blue-500 text-white rounded-md" data-period="7">7 jours</button>
+                        <button class="analytics-period-btn px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300" data-period="30">30 jours</button>
+                        <button class="analytics-period-btn px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300" data-period="90">90 jours</button>
+                        <button class="analytics-period-btn px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300" data-period="365">1 an</button>
+                    </div>
+                </div>
+
+                <!-- Key Metrics Overview -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                    <div class="bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg p-6 text-white">
+                        <div class="flex items-center">
+                            <i class="fas fa-users text-2xl mr-4"></i>
+                            <div>
+                                <div class="text-2xl font-bold">${analyticsData.totalUsers}</div>
+                                <div class="text-sm opacity-80">Total Utilisateurs</div>
+                                <div class="text-xs opacity-70 mt-1">
+                                    ${analyticsData.newUsersThisPeriod > 0 ? '+' : ''}${analyticsData.newUsersThisPeriod} ce mois
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-gradient-to-r from-green-500 to-green-600 rounded-lg p-6 text-white">
+                        <div class="flex items-center">
+                            <i class="fas fa-clipboard-list text-2xl mr-4"></i>
+                            <div>
+                                <div class="text-2xl font-bold">${analyticsData.activePrograms}</div>
+                                <div class="text-sm opacity-80">Programmes Actifs</div>
+                                <div class="text-xs opacity-70 mt-1">
+                                    ${analyticsData.completionRate}% taux de completion
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-gradient-to-r from-purple-500 to-purple-600 rounded-lg p-6 text-white">
+                        <div class="flex items-center">
+                            <i class="fas fa-dumbbell text-2xl mr-4"></i>
+                            <div>
+                                <div class="text-2xl font-bold">${analyticsData.totalWorkouts}</div>
+                                <div class="text-sm opacity-80">Séances Complétées</div>
+                                <div class="text-xs opacity-70 mt-1">
+                                    ${analyticsData.workoutsThisWeek} cette semaine
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-gradient-to-r from-orange-500 to-orange-600 rounded-lg p-6 text-white">
+                        <div class="flex items-center">
+                            <i class="fas fa-calendar-check text-2xl mr-4"></i>
+                            <div>
+                                <div class="text-2xl font-bold">${analyticsData.appointmentsThisMonth}</div>
+                                <div class="text-sm opacity-80">RDV ce mois</div>
+                                <div class="text-xs opacity-70 mt-1">
+                                    ${analyticsData.appointmentAttendanceRate}% présence
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Charts Section -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+                    <!-- User Growth Chart -->
+                    <div class="bg-white border rounded-lg p-6">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-4">
+                            <i class="fas fa-chart-area text-blue-500 mr-2"></i>
+                            Croissance des Utilisateurs
+                        </h3>
+                        <canvas id="userGrowthChart" width="400" height="200"></canvas>
+                    </div>
+
+                    <!-- Workout Activity Chart -->
+                    <div class="bg-white border rounded-lg p-6">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-4">
+                            <i class="fas fa-chart-bar text-green-500 mr-2"></i>
+                            Activité d'Entraînement
+                        </h3>
+                        <canvas id="workoutActivityChart" width="400" height="200"></canvas>
+                    </div>
+                </div>
+
+                <!-- Progress Tracking -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+                    <!-- Program Completion Chart -->
+                    <div class="bg-white border rounded-lg p-6">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-4">
+                            <i class="fas fa-chart-pie text-purple-500 mr-2"></i>
+                            Complétion des Programmes
+                        </h3>
+                        <div class="flex justify-center">
+                            <canvas id="programCompletionChart" width="300" height="300"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Coach Performance -->
+                    <div class="bg-white border rounded-lg p-6">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-4">
+                            <i class="fas fa-medal text-yellow-500 mr-2"></i>
+                            Performance des Coaches
+                        </h3>
+                        <div class="space-y-4">
+                            ${analyticsData.coachPerformance.map(coach => `
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center">
+                                        <img src="https://ui-avatars.com/api/?name=${encodeURIComponent(coach.name)}&size=40&background=0d7377&color=fff" 
+                                             alt="${coach.name}" class="w-10 h-10 rounded-full mr-3">
+                                        <div>
+                                            <div class="font-medium text-gray-900">${coach.name}</div>
+                                            <div class="text-sm text-gray-500">${coach.clients} clients</div>
+                                        </div>
+                                    </div>
+                                    <div class="text-right">
+                                        <div class="font-semibold text-gray-900">${coach.rating}/5</div>
+                                        <div class="text-sm text-gray-500">${coach.completedSessions} séances</div>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Engagement Metrics -->
+                <div class="bg-white border rounded-lg p-6">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">
+                        <i class="fas fa-pulse text-red-500 mr-2"></i>
+                        Métriques d'Engagement
+                    </h3>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <!-- Daily Active Users -->
+                        <div class="text-center">
+                            <div class="relative inline-flex items-center justify-center w-24 h-24 mb-4">
+                                <svg class="w-24 h-24 transform -rotate-90">
+                                    <circle cx="12" cy="12" r="10" transform="translate(36,36)" 
+                                            fill="transparent" stroke="#e5e7eb" stroke-width="2"/>
+                                    <circle cx="12" cy="12" r="10" transform="translate(36,36)" 
+                                            fill="transparent" stroke="#3b82f6" stroke-width="2"
+                                            stroke-dasharray="${2 * Math.PI * 10}"
+                                            stroke-dashoffset="${2 * Math.PI * 10 * (1 - analyticsData.dailyActiveUsersRate)}"/>
+                                </svg>
+                                <div class="absolute text-sm font-semibold">
+                                    ${Math.round(analyticsData.dailyActiveUsersRate * 100)}%
+                                </div>
+                            </div>
+                            <div class="font-medium text-gray-900">Utilisateurs Actifs Quotidiens</div>
+                            <div class="text-sm text-gray-500">${analyticsData.dailyActiveUsers} utilisateurs</div>
+                        </div>
+
+                        <!-- Message Response Rate -->
+                        <div class="text-center">
+                            <div class="relative inline-flex items-center justify-center w-24 h-24 mb-4">
+                                <svg class="w-24 h-24 transform -rotate-90">
+                                    <circle cx="12" cy="12" r="10" transform="translate(36,36)" 
+                                            fill="transparent" stroke="#e5e7eb" stroke-width="2"/>
+                                    <circle cx="12" cy="12" r="10" transform="translate(36,36)" 
+                                            fill="transparent" stroke="#10b981" stroke-width="2"
+                                            stroke-dasharray="${2 * Math.PI * 10}"
+                                            stroke-dashoffset="${2 * Math.PI * 10 * (1 - analyticsData.messageResponseRate)}"/>
+                                </svg>
+                                <div class="absolute text-sm font-semibold">
+                                    ${Math.round(analyticsData.messageResponseRate * 100)}%
+                                </div>
+                            </div>
+                            <div class="font-medium text-gray-900">Taux de Réponse Messages</div>
+                            <div class="text-sm text-gray-500">Avg: ${analyticsData.avgResponseTime}h</div>
+                        </div>
+
+                        <!-- Retention Rate -->
+                        <div class="text-center">
+                            <div class="relative inline-flex items-center justify-center w-24 h-24 mb-4">
+                                <svg class="w-24 h-24 transform -rotate-90">
+                                    <circle cx="12" cy="12" r="10" transform="translate(36,36)" 
+                                            fill="transparent" stroke="#e5e7eb" stroke-width="2"/>
+                                    <circle cx="12" cy="12" r="10" transform="translate(36,36)" 
+                                            fill="transparent" stroke="#8b5cf6" stroke-width="2"
+                                            stroke-dasharray="${2 * Math.PI * 10}"
+                                            stroke-dashoffset="${2 * Math.PI * 10 * (1 - analyticsData.retentionRate)}"/>
+                                </svg>
+                                <div class="absolute text-sm font-semibold">
+                                    ${Math.round(analyticsData.retentionRate * 100)}%
+                                </div>
+                            </div>
+                            <div class="font-medium text-gray-900">Taux de Rétention</div>
+                            <div class="text-sm text-gray-500">30 jours</div>
+                        </div>
+                    </div>
+                </div>
+            `
+
+            // Initialize charts after content is loaded
+            setTimeout(() => {
+                this.initializeAnalyticsCharts(analyticsData)
+                this.attachAnalyticsEventListeners()
+            }, 100)
+
+        } catch (error) {
+            console.error('Error loading analytics:', error)
+            content.innerHTML = `
+                <div class="text-center py-8">
+                    <i class="fas fa-exclamation-triangle text-red-500 text-2xl mb-2"></i>
+                    <div class="text-red-600">Erreur lors du chargement des analytics</div>
+                </div>
+            `
+        }
+    }
+
+    async getAnalyticsData() {
+        // In a real application, this would fetch from multiple endpoints
+        // For demo purposes, we'll generate realistic data
+        
+        try {
+            // Get actual data where possible
+            const usersResponse = await this.apiCall('/api/users')
+            const programsResponse = await this.apiCall('/api/programs')  
+            const workoutsResponse = await this.apiCall('/api/workouts')
+            const appointmentsResponse = await this.apiCall('/api/appointments')
+
+            const totalUsers = usersResponse.success ? usersResponse.data.length : 0
+            const totalPrograms = programsResponse.success ? programsResponse.data.length : 0
+            const totalWorkouts = workoutsResponse.success ? workoutsResponse.data.length : 0
+            const totalAppointments = appointmentsResponse.success ? appointmentsResponse.data.length : 0
+
+            // Calculate metrics from real data
+            const activePrograms = programsResponse.success ? 
+                programsResponse.data.filter(p => p.status === 'active').length : 0
+            
+            const completedWorkouts = workoutsResponse.success ?
+                workoutsResponse.data.filter(w => w.status === 'completed').length : 0
+
+            const thisMonthAppointments = appointmentsResponse.success ?
+                appointmentsResponse.data.filter(a => {
+                    const appointmentDate = new Date(a.appointment_date)
+                    const now = new Date()
+                    return appointmentDate.getMonth() === now.getMonth() && 
+                           appointmentDate.getFullYear() === now.getFullYear()
+                }).length : 0
+
+            // Generate realistic mock data for advanced analytics
+            return {
+                totalUsers,
+                newUsersThisPeriod: Math.floor(totalUsers * 0.15),
+                activePrograms,
+                completionRate: totalPrograms > 0 ? Math.round((activePrograms / totalPrograms) * 100) : 75,
+                totalWorkouts: completedWorkouts,
+                workoutsThisWeek: Math.floor(completedWorkouts * 0.1),
+                appointmentsThisMonth: thisMonthAppointments,
+                appointmentAttendanceRate: 87,
+                dailyActiveUsers: Math.floor(totalUsers * 0.35),
+                dailyActiveUsersRate: 0.35,
+                messageResponseRate: 0.92,
+                avgResponseTime: 2.4,
+                retentionRate: 0.78,
+                
+                // Mock chart data
+                userGrowthData: {
+                    labels: ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Jul'],
+                    data: [12, 19, 25, 31, 42, 38, totalUsers]
+                },
+                
+                workoutActivityData: {
+                    labels: ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'],
+                    data: [15, 22, 18, 25, 20, 12, 8]
+                },
+                
+                programCompletionData: {
+                    labels: ['Complété', 'En cours', 'Abandonné'],
+                    data: [65, 25, 10],
+                    colors: ['#10b981', '#f59e0b', '#ef4444']
+                },
+                
+                coachPerformance: [
+                    { name: 'Sophie Martin', clients: 15, rating: 4.8, completedSessions: 89 },
+                    { name: 'Thomas Dupont', clients: 12, rating: 4.6, completedSessions: 72 },
+                    { name: 'Marie Laurent', clients: 18, rating: 4.9, completedSessions: 95 },
+                    { name: 'Pierre Dubois', clients: 10, rating: 4.4, completedSessions: 54 }
+                ]
+            }
+        } catch (error) {
+            console.error('Error fetching analytics data:', error)
+            // Return default data in case of error
+            return {
+                totalUsers: 0,
+                newUsersThisPeriod: 0,
+                activePrograms: 0,
+                completionRate: 0,
+                totalWorkouts: 0,
+                workoutsThisWeek: 0,
+                appointmentsThisMonth: 0,
+                appointmentAttendanceRate: 0,
+                dailyActiveUsers: 0,
+                dailyActiveUsersRate: 0,
+                messageResponseRate: 0,
+                avgResponseTime: 0,
+                retentionRate: 0,
+                userGrowthData: { labels: [], data: [] },
+                workoutActivityData: { labels: [], data: [] },
+                programCompletionData: { labels: [], data: [], colors: [] },
+                coachPerformance: []
+            }
+        }
+    }
+
+    initializeAnalyticsCharts(data) {
+        // User Growth Line Chart
+        const userGrowthCtx = document.getElementById('userGrowthChart')
+        if (userGrowthCtx) {
+            // Since we're not using Chart.js library, we'll create simple CSS-based charts
+            this.createLineChart(userGrowthCtx, data.userGrowthData)
+        }
+
+        // Workout Activity Bar Chart
+        const workoutActivityCtx = document.getElementById('workoutActivityChart')
+        if (workoutActivityCtx) {
+            this.createBarChart(workoutActivityCtx, data.workoutActivityData)
+        }
+
+        // Program Completion Pie Chart
+        const programCompletionCtx = document.getElementById('programCompletionChart')
+        if (programCompletionCtx) {
+            this.createPieChart(programCompletionCtx, data.programCompletionData)
+        }
+    }
+
+    createLineChart(canvas, data) {
+        const ctx = canvas.getContext('2d')
+        const width = canvas.width
+        const height = canvas.height
+        const padding = 40
+
+        // Clear canvas
+        ctx.clearRect(0, 0, width, height)
+
+        // Draw axes
+        ctx.strokeStyle = '#e5e7eb'
+        ctx.lineWidth = 1
+        
+        // Y axis
+        ctx.beginPath()
+        ctx.moveTo(padding, padding)
+        ctx.lineTo(padding, height - padding)
+        ctx.stroke()
+
+        // X axis  
+        ctx.beginPath()
+        ctx.moveTo(padding, height - padding)
+        ctx.lineTo(width - padding, height - padding)
+        ctx.stroke()
+
+        if (data.data.length > 0) {
+            // Draw line
+            const maxValue = Math.max(...data.data)
+            const stepX = (width - 2 * padding) / (data.data.length - 1)
+            const stepY = (height - 2 * padding) / maxValue
+
+            ctx.strokeStyle = '#3b82f6'
+            ctx.lineWidth = 2
+            ctx.beginPath()
+
+            data.data.forEach((value, index) => {
+                const x = padding + index * stepX
+                const y = height - padding - value * stepY
+
+                if (index === 0) {
+                    ctx.moveTo(x, y)
+                } else {
+                    ctx.lineTo(x, y)
+                }
+            })
+            ctx.stroke()
+
+            // Draw points
+            ctx.fillStyle = '#3b82f6'
+            data.data.forEach((value, index) => {
+                const x = padding + index * stepX
+                const y = height - padding - value * stepY
+                ctx.beginPath()
+                ctx.arc(x, y, 4, 0, 2 * Math.PI)
+                ctx.fill()
+            })
+
+            // Draw labels
+            ctx.fillStyle = '#6b7280'
+            ctx.font = '12px sans-serif'
+            ctx.textAlign = 'center'
+            data.labels.forEach((label, index) => {
+                const x = padding + index * stepX
+                ctx.fillText(label, x, height - padding + 15)
+            })
+        }
+    }
+
+    createBarChart(canvas, data) {
+        const ctx = canvas.getContext('2d')
+        const width = canvas.width
+        const height = canvas.height
+        const padding = 40
+
+        ctx.clearRect(0, 0, width, height)
+
+        if (data.data.length > 0) {
+            const maxValue = Math.max(...data.data)
+            const barWidth = (width - 2 * padding) / data.data.length * 0.6
+            const barSpacing = (width - 2 * padding) / data.data.length
+
+            data.data.forEach((value, index) => {
+                const barHeight = (value / maxValue) * (height - 2 * padding)
+                const x = padding + index * barSpacing + (barSpacing - barWidth) / 2
+                const y = height - padding - barHeight
+
+                // Draw bar
+                ctx.fillStyle = '#10b981'
+                ctx.fillRect(x, y, barWidth, barHeight)
+
+                // Draw value on top
+                ctx.fillStyle = '#374151'
+                ctx.font = '12px sans-serif'
+                ctx.textAlign = 'center'
+                ctx.fillText(value.toString(), x + barWidth / 2, y - 5)
+
+                // Draw label
+                ctx.fillStyle = '#6b7280'
+                ctx.fillText(data.labels[index], x + barWidth / 2, height - padding + 15)
+            })
+        }
+    }
+
+    createPieChart(canvas, data) {
+        const ctx = canvas.getContext('2d')
+        const centerX = canvas.width / 2
+        const centerY = canvas.height / 2
+        const radius = Math.min(centerX, centerY) - 20
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height)
+
+        if (data.data.length > 0) {
+            const total = data.data.reduce((sum, value) => sum + value, 0)
+            let currentAngle = -Math.PI / 2
+
+            data.data.forEach((value, index) => {
+                const sliceAngle = (value / total) * 2 * Math.PI
+                
+                // Draw slice
+                ctx.beginPath()
+                ctx.moveTo(centerX, centerY)
+                ctx.arc(centerX, centerY, radius, currentAngle, currentAngle + sliceAngle)
+                ctx.closePath()
+                ctx.fillStyle = data.colors[index]
+                ctx.fill()
+                
+                // Draw label
+                const labelAngle = currentAngle + sliceAngle / 2
+                const labelX = centerX + Math.cos(labelAngle) * (radius * 0.7)
+                const labelY = centerY + Math.sin(labelAngle) * (radius * 0.7)
+                
+                ctx.fillStyle = 'white'
+                ctx.font = '12px sans-serif'
+                ctx.textAlign = 'center'
+                ctx.fillText(`${value}%`, labelX, labelY)
+
+                currentAngle += sliceAngle
+            })
+
+            // Draw legend
+            data.labels.forEach((label, index) => {
+                const legendY = canvas.height - 60 + index * 20
+                
+                ctx.fillStyle = data.colors[index]
+                ctx.fillRect(20, legendY - 8, 12, 12)
+                
+                ctx.fillStyle = '#374151'
+                ctx.font = '12px sans-serif'
+                ctx.textAlign = 'left'
+                ctx.fillText(`${label}: ${data.data[index]}%`, 40, legendY)
+            })
+        }
+    }
+
+    attachAnalyticsEventListeners() {
+        // Period filter buttons
+        document.querySelectorAll('.analytics-period-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                // Update active button
+                document.querySelectorAll('.analytics-period-btn').forEach(b => {
+                    b.classList.remove('bg-blue-500', 'text-white')
+                    b.classList.add('bg-gray-200', 'text-gray-700', 'hover:bg-gray-300')
+                })
+                
+                e.target.classList.remove('bg-gray-200', 'text-gray-700', 'hover:bg-gray-300')
+                e.target.classList.add('bg-blue-500', 'text-white')
+                
+                // Reload analytics with new period
+                const period = e.target.dataset.period
+                this.loadAnalyticsModule(period)
+            })
+        })
+    }
+
+    // ================== NOTIFICATIONS SYSTEM ==================
+
+    attachNotificationListeners() {
+        // Notifications button toggle
+        const notificationsBtn = document.getElementById('notifications-btn')
+        const notificationsDropdown = document.getElementById('notifications-dropdown')
+        
+        if (notificationsBtn && notificationsDropdown) {
+            notificationsBtn.addEventListener('click', (e) => {
+                e.stopPropagation()
+                notificationsDropdown.classList.toggle('hidden')
+                if (!notificationsDropdown.classList.contains('hidden')) {
+                    this.loadNotifications()
+                }
+            })
+
+            // Close dropdown when clicking outside
+            document.addEventListener('click', (e) => {
+                if (!notificationsBtn.contains(e.target) && !notificationsDropdown.contains(e.target)) {
+                    notificationsDropdown.classList.add('hidden')
+                }
+            })
+        }
+
+        // Mark all as read button
+        const markAllReadBtn = document.getElementById('mark-all-read')
+        if (markAllReadBtn) {
+            markAllReadBtn.addEventListener('click', async () => {
+                await this.markAllNotificationsRead()
+            })
+        }
+    }
+
+    startNotificationPolling() {
+        // Clear existing interval
+        if (this.notificationInterval) {
+            clearInterval(this.notificationInterval)
+        }
+
+        // Load initial notifications
+        this.loadNotifications()
+
+        // Poll for new notifications every 30 seconds
+        this.notificationInterval = setInterval(() => {
+            this.loadNotifications(true) // true = background load
+        }, 30000)
+    }
+
+    stopNotificationPolling() {
+        if (this.notificationInterval) {
+            clearInterval(this.notificationInterval)
+            this.notificationInterval = null
+        }
+    }
+
+    async loadNotifications(background = false) {
+        try {
+            const response = await this.apiCall('/api/notifications')
+            
+            if (response.success) {
+                const newNotifications = response.data || []
+                const previousUnreadCount = this.unreadCount
+                
+                this.notifications = newNotifications
+                this.unreadCount = newNotifications.filter(n => !n.is_read).length
+                
+                // Update badge
+                this.updateNotificationBadge()
+                
+                // Show browser notification for new messages (only if not background load)
+                if (!background && this.unreadCount > previousUnreadCount) {
+                    this.showBrowserNotification(
+                        'CoachFit', 
+                        `Vous avez ${this.unreadCount - previousUnreadCount} nouvelle(s) notification(s)`
+                    )
+                }
+                
+                // Update dropdown content if it's visible
+                const dropdown = document.getElementById('notifications-dropdown')
+                if (dropdown && !dropdown.classList.contains('hidden')) {
+                    this.renderNotificationsList()
+                }
+            }
+        } catch (error) {
+            console.error('Error loading notifications:', error)
+            // Create mock notifications for demo purposes
+            this.createMockNotifications()
+        }
+    }
+
+    createMockNotifications() {
+        // Create realistic mock notifications based on user role
+        const mockNotifications = []
+        const now = new Date()
+
+        if (this.user.role === 'coach') {
+            mockNotifications.push(
+                {
+                    id: 1,
+                    type: 'message',
+                    title: 'Nouveau message de Marie Dupont',
+                    message: 'Question sur le programme d\'entraînement',
+                    is_read: false,
+                    created_at: new Date(now - 5 * 60 * 1000).toISOString(), // 5 minutes ago
+                    icon: 'fas fa-envelope',
+                    color: 'text-blue-500'
+                },
+                {
+                    id: 2,
+                    type: 'appointment',
+                    title: 'Rendez-vous confirmé',
+                    message: 'RDV avec Pierre Martin demain à 14h00',
+                    is_read: false,
+                    created_at: new Date(now - 2 * 60 * 60 * 1000).toISOString(), // 2 hours ago
+                    icon: 'fas fa-calendar-check',
+                    color: 'text-green-500'
+                },
+                {
+                    id: 3,
+                    type: 'workout',
+                    title: 'Séance complétée',
+                    message: 'Julie Laurent a terminé sa séance "Upper Body"',
+                    is_read: true,
+                    created_at: new Date(now - 24 * 60 * 60 * 1000).toISOString(), // 1 day ago
+                    icon: 'fas fa-dumbbell',
+                    color: 'text-purple-500'
+                }
+            )
+        } else if (this.user.role === 'client') {
+            mockNotifications.push(
+                {
+                    id: 1,
+                    type: 'program',
+                    title: 'Nouveau programme assigné',
+                    message: 'Votre coach vous a assigné "Programme Force & Cardio"',
+                    is_read: false,
+                    created_at: new Date(now - 3 * 60 * 60 * 1000).toISOString(), // 3 hours ago
+                    icon: 'fas fa-clipboard-list',
+                    color: 'text-green-500'
+                },
+                {
+                    id: 2,
+                    type: 'message',
+                    title: 'Réponse de votre coach',
+                    message: 'Sophie Martin a répondu à votre message',
+                    is_read: false,
+                    created_at: new Date(now - 30 * 60 * 1000).toISOString(), // 30 minutes ago
+                    icon: 'fas fa-envelope',
+                    color: 'text-blue-500'
+                },
+                {
+                    id: 3,
+                    type: 'appointment',
+                    title: 'Rappel de rendez-vous',
+                    message: 'N\'oubliez pas votre RDV demain à 10h00',
+                    is_read: true,
+                    created_at: new Date(now - 12 * 60 * 60 * 1000).toISOString(), // 12 hours ago
+                    icon: 'fas fa-clock',
+                    color: 'text-orange-500'
+                }
+            )
+        } else { // admin
+            mockNotifications.push(
+                {
+                    id: 1,
+                    type: 'user',
+                    title: 'Nouveau coach inscrit',
+                    message: 'Alexandre Dubois s\'est inscrit comme coach',
+                    is_read: false,
+                    created_at: new Date(now - 60 * 60 * 1000).toISOString(), // 1 hour ago
+                    icon: 'fas fa-user-plus',
+                    color: 'text-green-500'
+                },
+                {
+                    id: 2,
+                    type: 'system',
+                    title: 'Rapport mensuel disponible',
+                    message: 'Le rapport d\'activité de septembre est prêt',
+                    is_read: false,
+                    created_at: new Date(now - 4 * 60 * 60 * 1000).toISOString(), // 4 hours ago
+                    icon: 'fas fa-chart-line',
+                    color: 'text-purple-500'
+                }
+            )
+        }
+
+        this.notifications = mockNotifications
+        this.unreadCount = mockNotifications.filter(n => !n.is_read).length
+        this.updateNotificationBadge()
+    }
+
+    updateNotificationBadge() {
+        const badge = document.getElementById('notifications-badge')
+        if (badge) {
+            if (this.unreadCount > 0) {
+                badge.textContent = this.unreadCount > 99 ? '99+' : this.unreadCount.toString()
+                badge.classList.remove('hidden')
+            } else {
+                badge.classList.add('hidden')
+            }
+        }
+    }
+
+    renderNotificationsList() {
+        const notificationsList = document.getElementById('notifications-list')
+        if (!notificationsList) return
+
+        if (this.notifications.length === 0) {
+            notificationsList.innerHTML = `
+                <div class="p-4 text-center text-gray-500">
+                    <i class="fas fa-bell-slash text-2xl mb-2"></i>
+                    <div>Aucune notification</div>
+                </div>
+            `
+            return
+        }
+
+        notificationsList.innerHTML = this.notifications.map(notification => `
+            <div class="notification-item p-3 border-b hover:bg-gray-50 cursor-pointer ${!notification.is_read ? 'bg-blue-50' : ''}" 
+                 data-id="${notification.id}">
+                <div class="flex items-start">
+                    <i class="${notification.icon} ${notification.color} mt-1 mr-3"></i>
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-center justify-between">
+                            <p class="text-sm font-medium text-gray-900 truncate">
+                                ${notification.title}
+                            </p>
+                            ${!notification.is_read ? '<div class="w-2 h-2 bg-blue-500 rounded-full ml-2"></div>' : ''}
+                        </div>
+                        <p class="text-sm text-gray-600 truncate">${notification.message}</p>
+                        <p class="text-xs text-gray-400 mt-1">${this.formatNotificationTime(notification.created_at)}</p>
+                    </div>
+                </div>
+            </div>
+        `).join('')
+
+        // Attach click listeners to notification items
+        notificationsList.querySelectorAll('.notification-item').forEach(item => {
+            item.addEventListener('click', () => {
+                const notificationId = parseInt(item.dataset.id)
+                this.handleNotificationClick(notificationId)
+            })
+        })
+    }
+
+    formatNotificationTime(timestamp) {
+        const now = new Date()
+        const time = new Date(timestamp)
+        const diffInMinutes = Math.floor((now - time) / (1000 * 60))
+
+        if (diffInMinutes < 1) return 'À l\'instant'
+        if (diffInMinutes < 60) return `${diffInMinutes}min`
+        if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)}h`
+        if (diffInMinutes < 43200) return `${Math.floor(diffInMinutes / 1440)}j`
+        
+        return time.toLocaleDateString('fr-FR', { 
+            day: '2-digit', 
+            month: '2-digit', 
+            year: '2-digit' 
+        })
+    }
+
+    async handleNotificationClick(notificationId) {
+        const notification = this.notifications.find(n => n.id === notificationId)
+        if (!notification) return
+
+        // Mark notification as read
+        if (!notification.is_read) {
+            await this.markNotificationRead(notificationId)
+        }
+
+        // Hide dropdown
+        document.getElementById('notifications-dropdown').classList.add('hidden')
+
+        // Navigate to relevant module based on notification type
+        switch (notification.type) {
+            case 'message':
+                this.loadModule('messages')
+                break
+            case 'appointment':
+                this.loadModule('appointments')
+                break
+            case 'program':
+                this.loadModule(this.user.role === 'coach' ? 'programs' : 'my-programs')
+                break
+            case 'workout':
+                this.loadModule(this.user.role === 'coach' ? 'workouts' : 'my-workouts')
+                break
+            case 'user':
+                if (this.user.role === 'admin') {
+                    this.loadModule('users')
+                }
+                break
+            case 'system':
+                if (this.user.role === 'admin') {
+                    this.loadModule('analytics')
+                }
+                break
+        }
+    }
+
+    async markNotificationRead(notificationId) {
+        try {
+            const response = await this.apiCall(`/api/notifications/${notificationId}/read`, 'PUT')
+            if (response.success) {
+                // Update local notification status
+                const notification = this.notifications.find(n => n.id === notificationId)
+                if (notification) {
+                    notification.is_read = true
+                    this.unreadCount = this.notifications.filter(n => !n.is_read).length
+                    this.updateNotificationBadge()
+                    this.renderNotificationsList()
+                }
+            }
+        } catch (error) {
+            console.error('Error marking notification as read:', error)
+            // For demo purposes, update locally
+            const notification = this.notifications.find(n => n.id === notificationId)
+            if (notification) {
+                notification.is_read = true
+                this.unreadCount = this.notifications.filter(n => !n.is_read).length
+                this.updateNotificationBadge()
+                this.renderNotificationsList()
+            }
+        }
+    }
+
+    async markAllNotificationsRead() {
+        try {
+            const response = await this.apiCall('/api/notifications/read-all', 'PUT')
+            if (response.success) {
+                // Update all notifications to read
+                this.notifications.forEach(n => n.is_read = true)
+                this.unreadCount = 0
+                this.updateNotificationBadge()
+                this.renderNotificationsList()
+            }
+        } catch (error) {
+            console.error('Error marking all notifications as read:', error)
+            // For demo purposes, update locally
+            this.notifications.forEach(n => n.is_read = true)
+            this.unreadCount = 0
+            this.updateNotificationBadge()
+            this.renderNotificationsList()
+        }
+    }
+
+    showBrowserNotification(title, message) {
+        // Check if browser notifications are supported and permitted
+        if ('Notification' in window) {
+            if (Notification.permission === 'granted') {
+                new Notification(title, {
+                    body: message,
+                    icon: '/static/icon-192x192.png', // Add your app icon
+                    badge: '/static/badge-72x72.png'  // Add your app badge
+                })
+            } else if (Notification.permission !== 'denied') {
+                // Request permission
+                Notification.requestPermission().then(permission => {
+                    if (permission === 'granted') {
+                        new Notification(title, {
+                            body: message,
+                            icon: '/static/icon-192x192.png',
+                            badge: '/static/badge-72x72.png'
+                        })
+                    }
+                })
+            }
+        }
+    }
+
+    showInAppNotification(message, type = 'info') {
+        // Create toast notification
+        const toast = document.createElement('div')
+        toast.className = `fixed top-4 right-4 z-50 max-w-sm bg-white border rounded-lg shadow-lg p-4 transform translate-x-full transition-transform duration-300`
+        
+        const colors = {
+            info: 'border-blue-500 text-blue-700',
+            success: 'border-green-500 text-green-700',
+            warning: 'border-yellow-500 text-yellow-700',
+            error: 'border-red-500 text-red-700'
+        }
+
+        const icons = {
+            info: 'fas fa-info-circle',
+            success: 'fas fa-check-circle',
+            warning: 'fas fa-exclamation-triangle',
+            error: 'fas fa-times-circle'
+        }
+
+        toast.innerHTML = `
+            <div class="flex items-center">
+                <i class="${icons[type]} ${colors[type]} mr-3"></i>
+                <div class="flex-1">
+                    <p class="text-sm font-medium text-gray-900">${message}</p>
+                </div>
+                <button class="ml-4 text-gray-400 hover:text-gray-600 close-toast">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        `
+
+        document.body.appendChild(toast)
+
+        // Animate in
+        setTimeout(() => {
+            toast.classList.remove('translate-x-full')
+        }, 100)
+
+        // Auto-hide after 5 seconds
+        setTimeout(() => {
+            toast.classList.add('translate-x-full')
+            setTimeout(() => toast.remove(), 300)
+        }, 5000)
+
+        // Close button
+        toast.querySelector('.close-toast').addEventListener('click', () => {
+            toast.classList.add('translate-x-full')
+            setTimeout(() => toast.remove(), 300)
+        })
+    }
+
+    // ================== END NOTIFICATIONS SYSTEM ==================
 
     async loadProfileModule() {
         const content = document.getElementById('module-content')
