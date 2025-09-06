@@ -274,6 +274,91 @@
     min-height: 300px;
 }
 
+/* Performance Optimizations */
+
+/* Lazy loading placeholder */
+img.lazy {
+    filter: blur(5px);
+    transition: filter 0.3s;
+}
+
+img.lazy:not([src]) {
+    visibility: hidden;
+}
+
+/* Smooth scrolling */
+html {
+    scroll-behavior: smooth;
+}
+
+/* Optimize animations for performance */
+* {
+    will-change: auto;
+}
+
+.modal-overlay {
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+}
+
+/* Improve button performance */
+button {
+    touch-action: manipulation;
+}
+
+/* Optimize form inputs */
+input, textarea, select {
+    -webkit-appearance: none;
+    appearance: none;
+}
+
+/* Reduce layout shifts */
+.skeleton {
+    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+    background-size: 200% 100%;
+    animation: loading 1.5s infinite;
+}
+
+@keyframes loading {
+    0% {
+        background-position: 200% 0;
+    }
+    100% {
+        background-position: -200% 0;
+    }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+    :root {
+        color-scheme: dark;
+    }
+}
+
+/* Reduce motion for accessibility */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}
+
+/* Print styles */
+@media print {
+    .no-print {
+        display: none !important;
+    }
+    
+    body {
+        -webkit-print-color-adjust: exact;
+        color-adjust: exact;
+    }
+}
+
 /* Mobile responsive */
 @media (max-width: 768px) {
     .mobile-hidden {

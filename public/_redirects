@@ -1,0 +1,23 @@
+# Redirections pour Cloudflare Pages
+
+# Redirection principale vers l'interface V2
+/  /v2  200
+
+# Redirection pour compatibilité
+/index.html  /v2  301
+/index  /v2  301
+
+# API routes - pas de redirection (gérées par le worker)
+/api/*  /api/*  200
+
+# Static assets
+/static/*  /static/*  200
+
+# Service Worker
+/sw.js  /sw.js  200
+
+# Manifest
+/manifest.json  /manifest.json  200
+
+# Fallback pour SPA - toutes les routes non-API vers /v2
+/*  /v2  200

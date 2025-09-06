@@ -35,26 +35,164 @@ app.route('/api/appointments', appointmentsRoutes)
 app.route('/api/messages', messagesRoutes)
 app.route('/api/users', usersRoutes)
 
-// Nouvelle interface moderne
+// Nouvelle interface moderne optimisée
 app.get('/v2', (c) => {
   return c.html(`
     <!DOCTYPE html>
-    <html lang="en">
+    <html lang="fr">
     <head>
         <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>CoachFit V2 - Plateforme de Coaching Fitness</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+        <title>CoachFit - Plateforme de Coaching Fitness</title>
+        
+        <!-- SEO Meta Tags -->
+        <meta name="description" content="CoachFit - Plateforme moderne de coaching fitness avec gestion de programmes, suivi nutritionnel et communication coach-client en temps réel.">
+        <meta name="keywords" content="coaching fitness, entraînement personnel, suivi nutritionnel, programmes fitness, coach sportif">
+        <meta name="author" content="CoachFit Team">
+        <meta name="robots" content="index, follow">
+        
+        <!-- Open Graph / Facebook -->
+        <meta property="og:type" content="website">
+        <meta property="og:title" content="CoachFit - Plateforme de Coaching Fitness">
+        <meta property="og:description" content="Plateforme moderne de coaching fitness avec gestion complète des programmes d'entraînement et suivi nutritionnel.">
+        <meta property="og:url" content="https://coachfit.pages.dev">
+        <meta property="og:image" content="https://coachfit.pages.dev/static/og-image.png">
+        
+        <!-- Twitter -->
+        <meta name="twitter:card" content="summary_large_image">
+        <meta name="twitter:title" content="CoachFit - Plateforme de Coaching Fitness">
+        <meta name="twitter:description" content="Plateforme moderne de coaching fitness avec gestion complète des programmes d'entraînement et suivi nutritionnel.">
+        <meta name="twitter:image" content="https://coachfit.pages.dev/static/twitter-image.png">
+        
+        <!-- PWA Meta Tags -->
+        <link rel="manifest" href="/manifest.json">
+        <meta name="theme-color" content="#4f46e5">
+        <meta name="mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-status-bar-style" content="default">
+        <meta name="apple-mobile-web-app-title" content="CoachFit">
+        
+        <!-- Icons -->
+        <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+        <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
+        <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32x32.png">
+        <link rel="icon" type="image/png" sizes="16x16" href="/static/favicon-16x16.png">
+        
+        <!-- Preload Critical Resources -->
+        <link rel="preload" href="/static/app.js" as="script">
+        <link rel="preload" href="/static/styles.css" as="style">
+        <link rel="preload" href="https://cdn.tailwindcss.com" as="script">
+        
+        <!-- DNS Prefetch for External Resources -->
+        <link rel="dns-prefetch" href="//cdn.tailwindcss.com">
+        <link rel="dns-prefetch" href="//cdn.jsdelivr.net">
+        
+        <!-- Critical CSS inline -->
+        <style>
+            /* Critical loading styles */
+            .loading-screen {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                z-index: 9999;
+                opacity: 1;
+                transition: opacity 0.5s ease;
+            }
+            .loading-screen.fade-out {
+                opacity: 0;
+                pointer-events: none;
+            }
+            .loading-spinner {
+                width: 50px;
+                height: 50px;
+                border: 3px solid rgba(255,255,255,0.3);
+                border-radius: 50%;
+                border-top-color: white;
+                animation: spin 1s ease-in-out infinite;
+            }
+            @keyframes spin {
+                to { transform: rotate(360deg); }
+            }
+        </style>
+        
+        <!-- External CSS -->
         <script src="https://cdn.tailwindcss.com"></script>
         <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
         <link href="/static/styles.css" rel="stylesheet">
     </head>
     <body class="bg-gray-50">
+        <!-- Loading Screen -->
+        <div id="loading-screen" class="loading-screen">
+            <div class="text-center">
+                <div class="loading-spinner mx-auto mb-4"></div>
+                <div class="text-white text-lg font-medium">
+                    <i class="fas fa-dumbbell mr-2"></i>
+                    CoachFit
+                </div>
+                <div class="text-white text-sm opacity-75 mt-2">Chargement...</div>
+            </div>
+        </div>
+        
         <div id="app">
             <!-- Application content will be dynamically rendered here -->
         </div>
         
+        <!-- Scripts -->
         <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
         <script src="/static/app.js"></script>
+        
+        <!-- Service Worker Registration -->
+        <script>
+            // Register Service Worker for offline support
+            if ('serviceWorker' in navigator) {
+                window.addEventListener('load', async () => {
+                    try {
+                        const registration = await navigator.serviceWorker.register('/sw.js');
+                        console.log('SW registered:', registration);
+                    } catch (error) {
+                        console.log('SW registration failed:', error);
+                    }
+                });
+            }
+            
+            // Hide loading screen after app loads
+            window.addEventListener('load', () => {
+                setTimeout(() => {
+                    const loadingScreen = document.getElementById('loading-screen');
+                    if (loadingScreen) {
+                        loadingScreen.classList.add('fade-out');
+                        setTimeout(() => loadingScreen.remove(), 500);
+                    }
+                }, 1000);
+            });
+            
+            // Optimize images loading
+            document.addEventListener('DOMContentLoaded', () => {
+                // Lazy load images when they come into view
+                if ('IntersectionObserver' in window) {
+                    const imageObserver = new IntersectionObserver((entries, observer) => {
+                        entries.forEach(entry => {
+                            if (entry.isIntersecting) {
+                                const img = entry.target;
+                                img.src = img.dataset.src;
+                                img.classList.remove('lazy');
+                                observer.unobserve(img);
+                            }
+                        });
+                    });
+                    
+                    document.querySelectorAll('img[data-src]').forEach(img => {
+                        imageObserver.observe(img);
+                    });
+                }
+            });
+        </script>
     </body>
     </html>
   `)
